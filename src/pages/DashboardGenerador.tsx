@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
-import { collection, query, deleteDoc, doc, where, addDoc, serverTimestamp, onSnapshot, getDocs } from 'firebase/firestore';
+import { collection, query, orderBy, deleteDoc, doc, where, addDoc, serverTimestamp, onSnapshot, getDocs } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { db, auth } from '../lib/firebase';
 import { toPng } from 'html-to-image';
@@ -15,6 +15,7 @@ export default function DashboardGenerador() {
   const [procesando, setProcesando] = useState(false);
   
   const [misQRs, setMisQRs] = useState<any[]>([]);
+  const [vehiculos, setVehiculos] = useState<any[]>([]);
   const [perfil, setPerfil] = useState<any>(null);
 
   const urlVehiculo = `https://gestion-flota-web.vercel.app/v/${patente.toUpperCase()}`;
@@ -43,9 +44,17 @@ export default function DashboardGenerador() {
       setMisQRs(qrs);
     });
 
+    // 3. Escuchar la flota asignada al usuario autenticado, ordenada alfabéticamente por patente/identificador
+    const qVehiculos = query(collection(db, 'vehiculos'), where('ownerId', '==', user.uid), orderBy('identificador', 'asc'));
+    const unsubscribeVehiculos = onSnapshot(qVehiculos, (snap) => {
+      const lista = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setVehiculos(lista);
+    });
+
     return () => {
       unsubscribePerfil();
       unsubscribeQRs();
+      unsubscribeVehiculos();
     };
   }, []);
 
@@ -102,6 +111,11 @@ export default function DashboardGenerador() {
         await addDoc(collection(db, 'vehiculos'), {
           patente: patenteMayuscula,
           tipo: tipoVehiculo,
+          marca: '',
+          modelo: '',
+          anio: '',
+          ownerId: user.uid,
+          identificador: patenteMayuscula,
           vencimientoRevision: '',
           vencimientoCirculacion: '',
           vencimientoCertificado: '',
@@ -269,6 +283,31 @@ export default function DashboardGenerador() {
                     ))}
                   </div>
                 )}
+
+                <div className="mt-8 border-t border-slate-100 pt-6">
+                  <h3 className="text-lg font-black text-slate-800 mb-4">Mi Flota</h3>
+                  {vehiculos.length === 0 ? (
+                    <div className="text-center py-6 border-2 border-dashed border-slate-200 rounded-2xl">
+                      <p className="text-slate-400 font-medium">No hay vehículos asociados a esta cuenta.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {vehiculos.map((vehiculo) => (
+                        <div key={vehiculo.id} className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xl font-black text-slate-800 tracking-wider">{vehiculo.patente || vehiculo.identificador}</span>
+                            <span className="text-[10px] font-bold text-slate-500 uppercase">{vehiculo.tipo || 'Camioneta'}</span>
+                          </div>
+                          <div className="mt-3 space-y-1 text-[11px] text-slate-600">
+                            <div><span className="font-bold text-slate-700">Marca:</span> {vehiculo.marca || '--'}</div>
+                            <div><span className="font-bold text-slate-700">Modelo:</span> {vehiculo.modelo || '--'}</div>
+                            <div><span className="font-bold text-slate-700">Año:</span> {vehiculo.anio || '--'}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>

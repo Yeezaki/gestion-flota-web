@@ -31,14 +31,20 @@ export default function DashboardAdmin() {
   const [vehiculos, setVehiculos] = useState<any[]>([]);
   const [guardandoVehiculo, setGuardandoVehiculo] = useState(false);
   const [sincronizando, setSincronizando] = useState(false);
+
+  const [marca, setMarca] = useState('');
+  const [modelo, setModelo] = useState('');
+  const [anio, setAnio] = useState<number | ''>('');
+  const [ownerId, setOwnerId] = useState('');
   
   const [formVehiculo, setFormVehiculo] = useState({
-    patente: '', tipo: 'Camioneta', vencimientoRevision: '', vencimientoCirculacion: '', vencimientoCertificado: '', kilometrajeActual: '', kilometrajeTaller: '', urlRevision: '', urlCirculacion: '', urlCertificado: ''
+    patente: '', tipo: 'Camioneta', vencimientoRevision: '', vencimientoCirculacion: '', vencimientoCertificado: '', vencimientoSoap: '', kilometrajeActual: '', kilometrajeTaller: '', urlRevision: '', urlCirculacion: '', urlCertificado: '', urlSoap: ''
   });
 
   const [pdfRevision, setPdfRevision] = useState<File | null>(null);
   const [pdfCirculacion, setPdfCirculacion] = useState<File | null>(null);
   const [pdfCertificado, setPdfCertificado] = useState<File | null>(null);
+  const [pdfSoap, setPdfSoap] = useState<File | null>(null);
   const [qrsGuardados, setQrsGuardados] = useState<any[]>([]);
   const [generandoPdf, setGenerandoPdf] = useState<string | null>(null);
   const [vehiculoEstadistica, setVehiculoEstadistica] = useState<string>('');
@@ -190,7 +196,8 @@ export default function DashboardAdmin() {
 
   const cargarVehiculos = async () => {
     try {
-      const querySnapshot = await getDocs(collection(db, 'vehiculos'));
+      const q = query(collection(db, 'vehiculos'), orderBy('patente', 'asc'));
+      const querySnapshot = await getDocs(q);
       setVehiculos(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     } catch (error) {
       console.error(error);
@@ -303,7 +310,10 @@ export default function DashboardAdmin() {
   }, [pestanaActiva]);
 
   useEffect(() => {
-    if (pestanaActiva === 'vehiculos') cargarVehiculos();
+    if (pestanaActiva === 'vehiculos') {
+      cargarUsuarios();
+      cargarVehiculos();
+    }
   }, [pestanaActiva]);
 
   useEffect(() => {
@@ -399,19 +409,33 @@ export default function DashboardAdmin() {
         urlCert = await getDownloadURL(certRef);
       }
 
+      let urlSoap = formVehiculo.urlSoap;
+      if (pdfSoap) {
+        const soapRef = ref(storage, `documentos/${patenteMayuscula}/soap.pdf`);
+        await uploadBytes(soapRef, pdfSoap);
+        urlSoap = await getDownloadURL(soapRef);
+      }
+
       const q = query(collection(db, 'vehiculos'), where('patente', '==', patenteMayuscula));
       const querySnapshot = await getDocs(q);
 
       const datosVehiculo = {
         tipo: formVehiculo.tipo,
+        marca,
+        modelo,
+        anio,
+        ownerId: ownerId || auth.currentUser?.email || 'admin_general',
+        identificador: patenteMayuscula,
         vencimientoRevision: formVehiculo.vencimientoRevision,
         vencimientoCirculacion: formVehiculo.vencimientoCirculacion,
         vencimientoCertificado: formVehiculo.vencimientoCertificado,
+        vencimientoSoap: formVehiculo.vencimientoSoap,
         kilometrajeActual: formVehiculo.kilometrajeActual,
         kilometrajeTaller: formVehiculo.kilometrajeTaller,
         urlRevision: urlRev,
         urlCirculacion: urlCirc,
-        urlCertificado: urlCert
+        urlCertificado: urlCert,
+        urlSoap
       };
 
       if (!querySnapshot.empty) {
@@ -420,19 +444,26 @@ export default function DashboardAdmin() {
         await logAccion('ACTUALIZAR_VEHICULO', `Se actualizaron los datos/documentos del vehículo: ${patenteMayuscula}`);
         alert("Datos y documentos actualizados correctamente.");
       } else {
-        await addDoc(collection(db, 'vehiculos'), {
+        const nuevoVehiculoRef = await addDoc(collection(db, 'vehiculos'), {
           ...datosVehiculo,
           patente: patenteMayuscula,
           fechaRegistro: serverTimestamp()
         });
+        const nuevoVehiculo = { id: nuevoVehiculoRef.id, ...datosVehiculo, patente: patenteMayuscula, fechaRegistro: serverTimestamp() };
+        setVehiculos(prev => [nuevoVehiculo, ...prev]);
         await logAccion('REGISTRAR_VEHICULO', `Se ingresó un nuevo vehículo al sistema: ${patenteMayuscula}`);
         alert("Vehiculo registrado correctamente.");
       }
 
-      setFormVehiculo({ patente: '', tipo: 'Camioneta', vencimientoRevision: '', vencimientoCirculacion: '', vencimientoCertificado: '', kilometrajeActual: '', kilometrajeTaller: '', urlRevision: '', urlCirculacion: '', urlCertificado: '' });
+      setFormVehiculo({ patente: '', tipo: 'Camioneta', vencimientoRevision: '', vencimientoCirculacion: '', vencimientoCertificado: '', vencimientoSoap: '', kilometrajeActual: '', kilometrajeTaller: '', urlRevision: '', urlCirculacion: '', urlCertificado: '', urlSoap: '' });
+      setMarca('');
+      setModelo('');
+      setAnio('');
+      setOwnerId('');
       setPdfRevision(null);
       setPdfCirculacion(null);
       setPdfCertificado(null);
+      setPdfSoap(null);
       
       const fileRev = document.getElementById('file-rev') as HTMLInputElement;
       if (fileRev) fileRev.value = "";
@@ -440,6 +471,8 @@ export default function DashboardAdmin() {
       if (fileCirc) fileCirc.value = "";
       const fileCert = document.getElementById('file-cert') as HTMLInputElement;
       if (fileCert) fileCert.value = "";
+      const fileSoap = document.getElementById('file-soap') as HTMLInputElement;
+      if (fileSoap) fileSoap.value = "";
 
       cargarVehiculos();
     } catch (error) {
@@ -457,15 +490,22 @@ export default function DashboardAdmin() {
       vencimientoRevision: vehiculo.vencimientoRevision || '',
       vencimientoCirculacion: vehiculo.vencimientoCirculacion || '',
       vencimientoCertificado: vehiculo.vencimientoCertificado || '',
+      vencimientoSoap: vehiculo.vencimientoSoap || '',
       kilometrajeActual: vehiculo.kilometrajeActual || '',
       kilometrajeTaller: vehiculo.kilometrajeTaller || '',
       urlRevision: vehiculo.urlRevision || '',
       urlCirculacion: vehiculo.urlCirculacion || '',
-      urlCertificado: vehiculo.urlCertificado || ''
+      urlCertificado: vehiculo.urlCertificado || '',
+      urlSoap: vehiculo.urlSoap || ''
     });
+    setMarca(vehiculo.marca || '');
+    setModelo(vehiculo.modelo || '');
+    setAnio(vehiculo.anio || '');
+    setOwnerId(vehiculo.ownerId || '');
     setPdfRevision(null);
     setPdfCirculacion(null);
     setPdfCertificado(null);
+    setPdfSoap(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -913,6 +953,43 @@ export default function DashboardAdmin() {
 
                 <div className="grid grid-cols-2 gap-4 pt-2">
                   <div>
+                    <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">Marca</label>
+                    <input type="text" value={marca} onChange={(e) => setMarca(e.target.value)} placeholder="Ej: Ford" className="w-full p-3 border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">Modelo</label>
+                    <input type="text" value={modelo} onChange={(e) => setModelo(e.target.value)} placeholder="Ej: Ranger" className="w-full p-3 border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 pt-2">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">Año</label>
+                    <input type="number" value={anio} onChange={(e) => setAnio(e.target.value === '' ? '' : Number(e.target.value))} placeholder="Ej: 2024" className="w-full p-3 border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">Responsable</label>
+                    <select value={ownerId} onChange={(e) => setOwnerId(e.target.value)} className="w-full p-3 border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                      <option value="">Seleccionar responsable...</option>
+                      <optgroup label="Administradores (Acceso Total)">
+                        {usuariosRegistrados.filter(user => user.rol === 'admin').map(user => (
+                          <option key={user.id} value={user.email}>{user.email}</option>
+                        ))}
+                        {auth.currentUser?.email && (
+                          <option value={auth.currentUser.email}>{auth.currentUser.email}</option>
+                        )}
+                      </optgroup>
+                      <optgroup label="Generadores / Clientes de Flota">
+                        {usuariosRegistrados.filter(user => user.rol === 'generador_qr').map(user => (
+                          <option key={user.id} value={user.id || user.email}>{user.razonSocial || user.email}</option>
+                        ))}
+                      </optgroup>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 pt-2">
+                  <div>
                     <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">Km Actual</label>
                     <input type="number" value={formVehiculo.kilometrajeActual} onChange={(e) => setFormVehiculo({...formVehiculo, kilometrajeActual: e.target.value})} placeholder="Ej: 15000" className="w-full p-3 border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none" />
                   </div>
@@ -979,7 +1056,7 @@ export default function DashboardAdmin() {
                 </div>
                 
                 <div className="pt-4 border-t border-slate-100 mt-2">
-                  <label className="block text-sm font-medium text-slate-600 mb-1">Certificado</label>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Certificado Mantención</label>
                   <input type="date" value={formVehiculo.vencimientoCertificado} onChange={(e) => setFormVehiculo({...formVehiculo, vencimientoCertificado: e.target.value})} className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none text-slate-700 mb-2" />
                   
                   <div className="flex flex-col gap-2">
@@ -997,7 +1074,34 @@ export default function DashboardAdmin() {
                     {formVehiculo.urlCertificado && !pdfCertificado && (
                       <div className="flex flex-col gap-2 bg-green-50 p-2 rounded-xl border border-green-200">
                         <span className="text-xs text-green-700 font-bold text-center">PDF Actual Guardado</span>
-                        <button type="button" onClick={() => forzarDescarga(formVehiculo.urlCertificado, `Certificado_${formVehiculo.patente}.pdf`)} className="w-full text-xs bg-white text-green-700 px-3 py-2 rounded-lg shadow-sm font-bold hover:bg-green-100 border border-green-200 flex items-center justify-center gap-1">
+                        <button type="button" onClick={() => forzarDescarga(formVehiculo.urlCertificado, `CertificadoMantencion_${formVehiculo.patente}.pdf`)} className="w-full text-xs bg-white text-green-700 px-3 py-2 rounded-lg shadow-sm font-bold hover:bg-green-100 border border-green-200 flex items-center justify-center gap-1">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                          Descargar
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-slate-100 mt-2">
+                  <label className="block text-sm font-medium text-slate-600 mb-1">SOAP</label>
+                  <input type="date" value={formVehiculo.vencimientoSoap} onChange={(e) => setFormVehiculo({...formVehiculo, vencimientoSoap: e.target.value})} className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none text-slate-700 mb-2" />
+                  <div className="flex flex-col gap-2">
+                    {!pdfSoap ? (
+                      <label className="cursor-pointer bg-blue-50 text-blue-600 px-4 py-2 rounded-xl text-sm font-bold border border-blue-200 hover:bg-blue-100 transition-colors text-center">
+                        Seleccionar PDF
+                        <input type="file" id="file-soap" accept="application/pdf" onChange={(e) => setPdfSoap(e.target.files ? e.target.files[0] : null)} className="hidden" />
+                      </label>
+                    ) : (
+                      <div className="flex items-center justify-between bg-slate-100 p-2 rounded-xl border border-slate-200">
+                        <span className="text-xs text-slate-600 truncate max-w-[150px] font-medium">{pdfSoap.name}</span>
+                        <button type="button" onClick={() => { setPdfSoap(null); const el = document.getElementById('file-soap') as HTMLInputElement; if (el) el.value = ''; }} className="text-xs text-red-500 font-bold hover:underline bg-red-50 px-2 py-1 rounded">Quitar</button>
+                      </div>
+                    )}
+                    {formVehiculo.urlSoap && !pdfSoap && (
+                      <div className="flex flex-col gap-2 bg-green-50 p-2 rounded-xl border border-green-200">
+                        <span className="text-xs text-green-700 font-bold text-center">PDF Actual Guardado</span>
+                        <button type="button" onClick={() => forzarDescarga(formVehiculo.urlSoap, `SOAP_${formVehiculo.patente}.pdf`)} className="w-full text-xs bg-white text-green-700 px-3 py-2 rounded-lg shadow-sm font-bold hover:bg-green-100 border border-green-200 flex items-center justify-center gap-1">
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                           Descargar
                         </button>
@@ -1008,7 +1112,7 @@ export default function DashboardAdmin() {
 
                 <div className="flex gap-2 mt-6 pt-4">
                   <button type="submit" disabled={guardandoVehiculo} className="flex-1 bg-slate-800 text-white font-bold py-3 rounded-xl hover:bg-slate-900 transition-all">{guardandoVehiculo ? 'Guardando...' : 'Guardar Datos'}</button>
-                  <button type="button" onClick={() => setFormVehiculo({ patente: '', tipo: 'Camioneta', vencimientoRevision: '', vencimientoCirculacion: '', vencimientoCertificado: '', kilometrajeActual: '', kilometrajeTaller: '', urlRevision: '', urlCirculacion: '', urlCertificado: '' })} className="px-4 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition-all">Limpiar</button>
+                  <button type="button" onClick={() => setFormVehiculo({ patente: '', tipo: 'Camioneta', vencimientoRevision: '', vencimientoCirculacion: '', vencimientoCertificado: '', vencimientoSoap: '', kilometrajeActual: '', kilometrajeTaller: '', urlRevision: '', urlCirculacion: '', urlCertificado: '', urlSoap: '' })} className="px-4 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition-all">Limpiar</button>
                 </div>
               </form>
             </div>
@@ -1019,21 +1123,50 @@ export default function DashboardAdmin() {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-white text-slate-600 text-xs uppercase tracking-wider border-b border-slate-100">
-                      <th className="p-4 font-bold">Vehiculo</th><th className="p-4 font-bold">Rev. Tecnica</th><th className="p-4 font-bold">Permiso Circ.</th><th className="p-4 font-bold">Certificado</th><th className="p-4 font-bold text-center">Acciones</th>
+                      <th className="p-4 font-bold">Vehiculo</th><th className="p-4 font-bold">Rev. Tecnica</th><th className="p-4 font-bold">Permiso Circ.</th><th className="p-4 font-bold">Certificado Mantención</th><th className="p-4 font-bold">SOAP</th><th className="p-4 font-bold text-center">Acciones</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {vehiculosPaginados.length === 0 ? (<tr><td colSpan={5} className="p-8 text-center text-slate-400">No se encontraron vehiculos.</td></tr>) 
+                    {vehiculosPaginados.length === 0 ? (<tr><td colSpan={6} className="p-8 text-center text-slate-400">No se encontraron vehiculos.</td></tr>) 
                     : vehiculosPaginados.map((vehiculo) => {
                       const revInfo = calcularEstadoVencimiento(vehiculo.vencimientoRevision);
                       const circInfo = calcularEstadoVencimiento(vehiculo.vencimientoCirculacion);
                       const certInfo = calcularEstadoVencimiento(vehiculo.vencimientoCertificado);
+                      const soapInfo = calcularEstadoVencimiento(vehiculo.vencimientoSoap);
+                      const ownerValue = vehiculo.ownerId || '';
+                      const ownerUser = usuariosRegistrados.find((user: any) => user.email === ownerValue || user.id === ownerValue);
+                      const ownerIsAdmin = ownerUser?.rol === 'admin' || ownerValue === auth.currentUser?.email;
+                      const ownerIsGenerador = ownerUser?.rol === 'generador_qr';
                       return (
                         <tr key={vehiculo.id} className="hover:bg-slate-50">
                           <td className="p-4">
                             <span className="font-black text-slate-800 text-lg block">{vehiculo.patente}</span>
                             <span className="text-[10px] font-bold text-slate-500 uppercase block mb-1">{vehiculo.tipo || 'Camioneta'}</span>
-                            <div className="flex gap-2 text-[10px] bg-slate-100 px-2 py-1 rounded-md inline-flex border border-slate-200">
+                            <div className="text-[10px] mt-2 space-y-1">
+                              <div><span className="font-medium text-slate-500">Marca:</span> <span className="font-bold text-slate-800">{vehiculo.marca || '--'}</span></div>
+                              <div><span className="font-medium text-slate-500">Modelo:</span> <span className="font-bold text-slate-800">{vehiculo.modelo || '--'}</span></div>
+                              <div><span className="font-medium text-slate-500">Año:</span> <span className="font-bold text-slate-800">{vehiculo.anio || '--'}</span></div>
+                              <div className="mt-2">
+                                {!ownerValue ? (
+                                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
+                                    <span className="w-2 h-2 rounded-full bg-slate-400"></span>Sin Asignar
+                                  </span>
+                                ) : ownerIsAdmin ? (
+                                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                    <span className="w-2 h-2 rounded-full bg-rose-500"></span>Admin: {ownerUser?.email || ownerValue}
+                                  </span>
+                                ) : ownerIsGenerador ? (
+                                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>Flota: {ownerUser?.razonSocial || ownerUser?.email || ownerValue}
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
+                                    <span className="w-2 h-2 rounded-full bg-slate-400"></span>{ownerValue}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex gap-2 text-[10px] bg-slate-100 px-2 py-1 rounded-md inline-flex border border-slate-200 mt-2">
                               <span className="font-medium text-slate-600">KM: <span className="font-bold text-slate-800">{vehiculo.kilometrajeActual || '--'}</span></span>
                               <span className="text-slate-300">|</span>
                               <span className="font-medium text-blue-600">Taller: <span className="font-bold">{vehiculo.kilometrajeTaller || '--'}</span></span>
@@ -1065,7 +1198,18 @@ export default function DashboardAdmin() {
                             <div className="flex flex-col items-start gap-2">
                               <span className={`px-3 py-1 rounded-full text-xs border ${certInfo.clase}`}>{certInfo.texto}</span>
                               {vehiculo.urlCertificado && (
-                                <button onClick={() => forzarDescarga(vehiculo.urlCertificado, `Certificado_${vehiculo.patente}.pdf`)} className="text-[10px] w-full font-bold bg-white text-slate-700 border border-slate-200 px-2 py-1.5 rounded-lg shadow-sm hover:bg-slate-50 hover:text-blue-600 transition-all flex items-center justify-center gap-1">
+                                <button onClick={() => forzarDescarga(vehiculo.urlCertificado, `CertificadoMantencion_${vehiculo.patente}.pdf`)} className="text-[10px] w-full font-bold bg-white text-slate-700 border border-slate-200 px-2 py-1.5 rounded-lg shadow-sm hover:bg-slate-50 hover:text-blue-600 transition-all flex items-center justify-center gap-1">
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                                  Descargar
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                          <td className="p-4">
+                            <div className="flex flex-col items-start gap-2">
+                              <span className={`px-3 py-1 rounded-full text-xs border ${soapInfo.clase}`}>{soapInfo.texto}</span>
+                              {vehiculo.urlSoap && (
+                                <button onClick={() => forzarDescarga(vehiculo.urlSoap, `SOAP_${vehiculo.patente}.pdf`)} className="text-[10px] w-full font-bold bg-white text-slate-700 border border-slate-200 px-2 py-1.5 rounded-lg shadow-sm hover:bg-slate-50 hover:text-blue-600 transition-all flex items-center justify-center gap-1">
                                   <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                                   Descargar
                                 </button>
