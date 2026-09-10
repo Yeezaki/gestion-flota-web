@@ -3,13 +3,32 @@ import { Link, useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { collection, query, orderBy, getDocs, deleteDoc, doc, where, updateDoc, addDoc, serverTimestamp, setDoc, limit } from 'firebase/firestore';
 import { getAuth, signOut, createUserWithEmailAndPassword } from 'firebase/auth';
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { ref, deleteObject, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { db, auth, storage, firebaseConfig } from '../lib/firebase';
 import { toPng } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import { LOGO_BASE64 } from '../constants';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+
+type FormEditState = {
+  patente: string;
+  tipo: string;
+  marca: string;
+  modelo: string;
+  anio: string;
+  ownerId: string;
+  kilometrajeActual: string;
+  kilometrajeTaller: string;
+  vencimientoRevision: string;
+  vencimientoCirculacion: string;
+  vencimientoCertificado: string;
+  vencimientoSoap: string;
+  urlRevision: string;
+  urlCirculacion: string;
+  urlCertificado: string;
+  urlSoap: string;
+};
 
 export default function DashboardAdmin() {
   const navigate = useNavigate();
@@ -20,7 +39,7 @@ export default function DashboardAdmin() {
   
   const [limiteReportes, setLimiteReportes] = useState(10);
   const [limiteVehiculos, setLimiteVehiculos] = useState(10);
-  const [limiteQRs, setLimiteQRs] = useState(12);
+  const [limitesQR, setLimitesQR] = useState<Record<string, number>>({});
   
   const [reportes, setReportes] = useState<any[]>([]);
   const [citas, setCitas] = useState<any[]>([]);
@@ -29,22 +48,19 @@ export default function DashboardAdmin() {
   const [otSeleccionada, setOtSeleccionada] = useState<any | null>(null);
   
   const [vehiculos, setVehiculos] = useState<any[]>([]);
-  const [guardandoVehiculo, setGuardandoVehiculo] = useState(false);
-  const [sincronizando, setSincronizando] = useState(false);
-
-  const [marca, setMarca] = useState('');
-  const [modelo, setModelo] = useState('');
-  const [anio, setAnio] = useState<number | ''>('');
-  const [ownerId, setOwnerId] = useState('');
-  
-  const [formVehiculo, setFormVehiculo] = useState({
-    patente: '', tipo: 'Camioneta', vencimientoRevision: '', vencimientoCirculacion: '', vencimientoCertificado: '', vencimientoSoap: '', kilometrajeActual: '', kilometrajeTaller: '', urlRevision: '', urlCirculacion: '', urlCertificado: '', urlSoap: ''
+  const [vehiculoEditando, setVehiculoEditando] = useState<any | null>(null);
+  const [guardandoEdicion, setGuardandoEdicion] = useState(false);
+  const [formEdit, setFormEdit] = useState<FormEditState>({
+    patente: '', tipo: '', marca: '', modelo: '', anio: '', ownerId: '',
+    kilometrajeActual: '', kilometrajeTaller: '',
+    vencimientoRevision: '', vencimientoCirculacion: '', vencimientoCertificado: '', vencimientoSoap: '',
+    urlRevision: '', urlCirculacion: '', urlCertificado: '', urlSoap: ''
   });
+  const [pdfRevisionEdit, setPdfRevisionEdit] = useState<File | null>(null);
+  const [pdfCirculacionEdit, setPdfCirculacionEdit] = useState<File | null>(null);
+  const [pdfCertificadoEdit, setPdfCertificadoEdit] = useState<File | null>(null);
+  const [pdfSoapEdit, setPdfSoapEdit] = useState<File | null>(null);
 
-  const [pdfRevision, setPdfRevision] = useState<File | null>(null);
-  const [pdfCirculacion, setPdfCirculacion] = useState<File | null>(null);
-  const [pdfCertificado, setPdfCertificado] = useState<File | null>(null);
-  const [pdfSoap, setPdfSoap] = useState<File | null>(null);
   const [qrsGuardados, setQrsGuardados] = useState<any[]>([]);
   const [generandoPdf, setGenerandoPdf] = useState<string | null>(null);
   const [vehiculoEstadistica, setVehiculoEstadistica] = useState<string>('');
@@ -254,7 +270,6 @@ export default function DashboardAdmin() {
   useEffect(() => {
     setLimiteReportes(10);
     setLimiteVehiculos(10);
-    setLimiteQRs(12);
   }, [pestanaActiva, busqueda, filtroEstado, filtroTipoVehiculo]);
 
   useEffect(() => {
@@ -382,204 +397,184 @@ export default function DashboardAdmin() {
     }
   };
 
-  const registrarOActualizarVehiculo = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setGuardandoVehiculo(true);
-    const patenteMayuscula = formVehiculo.patente.toUpperCase();
-
-    try {
-      let urlRev = formVehiculo.urlRevision;
-      if (pdfRevision) {
-        const revRef = ref(storage, `documentos/${patenteMayuscula}/revision.pdf`);
-        await uploadBytes(revRef, pdfRevision);
-        urlRev = await getDownloadURL(revRef);
-      }
-
-      let urlCirc = formVehiculo.urlCirculacion;
-      if (pdfCirculacion) {
-        const circRef = ref(storage, `documentos/${patenteMayuscula}/circulacion.pdf`);
-        await uploadBytes(circRef, pdfCirculacion);
-        urlCirc = await getDownloadURL(circRef);
-      }
-
-      let urlCert = formVehiculo.urlCertificado;
-      if (pdfCertificado) {
-        const certRef = ref(storage, `documentos/${patenteMayuscula}/certificado.pdf`);
-        await uploadBytes(certRef, pdfCertificado);
-        urlCert = await getDownloadURL(certRef);
-      }
-
-      let urlSoap = formVehiculo.urlSoap;
-      if (pdfSoap) {
-        const soapRef = ref(storage, `documentos/${patenteMayuscula}/soap.pdf`);
-        await uploadBytes(soapRef, pdfSoap);
-        urlSoap = await getDownloadURL(soapRef);
-      }
-
-      const q = query(collection(db, 'vehiculos'), where('patente', '==', patenteMayuscula));
-      const querySnapshot = await getDocs(q);
-
-      const datosVehiculo = {
-        tipo: formVehiculo.tipo,
-        marca,
-        modelo,
-        anio,
-        ownerId: ownerId || auth.currentUser?.email || 'admin_general',
-        identificador: patenteMayuscula,
-        vencimientoRevision: formVehiculo.vencimientoRevision,
-        vencimientoCirculacion: formVehiculo.vencimientoCirculacion,
-        vencimientoCertificado: formVehiculo.vencimientoCertificado,
-        vencimientoSoap: formVehiculo.vencimientoSoap,
-        kilometrajeActual: formVehiculo.kilometrajeActual,
-        kilometrajeTaller: formVehiculo.kilometrajeTaller,
-        urlRevision: urlRev,
-        urlCirculacion: urlCirc,
-        urlCertificado: urlCert,
-        urlSoap
-      };
-
-      if (!querySnapshot.empty) {
-        const idVehiculoExistente = querySnapshot.docs[0].id;
-        await updateDoc(doc(db, 'vehiculos', idVehiculoExistente), datosVehiculo);
-        await logAccion('ACTUALIZAR_VEHICULO', `Se actualizaron los datos/documentos del vehículo: ${patenteMayuscula}`);
-        alert("Datos y documentos actualizados correctamente.");
-      } else {
-        const nuevoVehiculoRef = await addDoc(collection(db, 'vehiculos'), {
-          ...datosVehiculo,
-          patente: patenteMayuscula,
-          fechaRegistro: serverTimestamp()
-        });
-        const nuevoVehiculo = { id: nuevoVehiculoRef.id, ...datosVehiculo, patente: patenteMayuscula, fechaRegistro: serverTimestamp() };
-        setVehiculos(prev => [nuevoVehiculo, ...prev]);
-        await logAccion('REGISTRAR_VEHICULO', `Se ingresó un nuevo vehículo al sistema: ${patenteMayuscula}`);
-        alert("Vehiculo registrado correctamente.");
-      }
-
-      setFormVehiculo({ patente: '', tipo: 'Camioneta', vencimientoRevision: '', vencimientoCirculacion: '', vencimientoCertificado: '', vencimientoSoap: '', kilometrajeActual: '', kilometrajeTaller: '', urlRevision: '', urlCirculacion: '', urlCertificado: '', urlSoap: '' });
-      setMarca('');
-      setModelo('');
-      setAnio('');
-      setOwnerId('');
-      setPdfRevision(null);
-      setPdfCirculacion(null);
-      setPdfCertificado(null);
-      setPdfSoap(null);
-      
-      const fileRev = document.getElementById('file-rev') as HTMLInputElement;
-      if (fileRev) fileRev.value = "";
-      const fileCirc = document.getElementById('file-circ') as HTMLInputElement;
-      if (fileCirc) fileCirc.value = "";
-      const fileCert = document.getElementById('file-cert') as HTMLInputElement;
-      if (fileCert) fileCert.value = "";
-      const fileSoap = document.getElementById('file-soap') as HTMLInputElement;
-      if (fileSoap) fileSoap.value = "";
-
-      cargarVehiculos();
-    } catch (error) {
-      console.error(error);
-      alert("Error al procesar el vehiculo");
-    } finally {
-      setGuardandoVehiculo(false);
-    }
-  };
-
   const editarVehiculoEnFormulario = (vehiculo: any) => {
-    setFormVehiculo({
+    setVehiculoEditando(vehiculo);
+    setPdfRevisionEdit(null);
+    setPdfCirculacionEdit(null);
+    setPdfCertificadoEdit(null);
+    setPdfSoapEdit(null);
+    setFormEdit({
       patente: vehiculo.patente,
-      tipo: vehiculo.tipo === 'Semi remolque' ? 'Semirremolque' : (vehiculo.tipo || 'Camioneta'),
+      tipo: vehiculo.tipo || 'Camioneta',
+      marca: vehiculo.marca || '',
+      modelo: vehiculo.modelo || '',
+      anio: vehiculo.anio || '',
+      ownerId: vehiculo.ownerId || '',
+      kilometrajeActual: vehiculo.kilometrajeActual || '',
+      kilometrajeTaller: vehiculo.kilometrajeTaller || '',
       vencimientoRevision: vehiculo.vencimientoRevision || '',
       vencimientoCirculacion: vehiculo.vencimientoCirculacion || '',
       vencimientoCertificado: vehiculo.vencimientoCertificado || '',
       vencimientoSoap: vehiculo.vencimientoSoap || '',
-      kilometrajeActual: vehiculo.kilometrajeActual || '',
-      kilometrajeTaller: vehiculo.kilometrajeTaller || '',
       urlRevision: vehiculo.urlRevision || '',
       urlCirculacion: vehiculo.urlCirculacion || '',
       urlCertificado: vehiculo.urlCertificado || '',
       urlSoap: vehiculo.urlSoap || ''
     });
-    setMarca(vehiculo.marca || '');
-    setModelo(vehiculo.modelo || '');
-    setAnio(vehiculo.anio || '');
-    setOwnerId(vehiculo.ownerId || '');
-    setPdfRevision(null);
-    setPdfCirculacion(null);
-    setPdfCertificado(null);
-    setPdfSoap(null);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const eliminarDocumentoVehiculo = async (tipoDoc: 'revision' | 'circulacion' | 'certificado' | 'soap') => {
+    if (!vehiculoEditando) return;
+
+    const mapeo: Record<'revision' | 'circulacion' | 'certificado' | 'soap', { urlKey: keyof FormEditState; storage: string; label: string }> = {
+      revision: { urlKey: 'urlRevision', storage: 'documentos/' + formEdit.patente.trim().toUpperCase() + '/revision.pdf', label: 'Rev. Técnica' },
+      circulacion: { urlKey: 'urlCirculacion', storage: 'documentos/' + formEdit.patente.trim().toUpperCase() + '/circulacion.pdf', label: 'Permiso Circulación' },
+      certificado: { urlKey: 'urlCertificado', storage: 'documentos/' + formEdit.patente.trim().toUpperCase() + '/certificado.pdf', label: 'Certificado Mantención' },
+      soap: { urlKey: 'urlSoap', storage: 'documentos/' + formEdit.patente.trim().toUpperCase() + '/soap.pdf', label: 'SOAP' }
+    };
+
+    const docInfo = mapeo[tipoDoc];
+    const urlActual = formEdit[docInfo.urlKey];
+    if (!urlActual) {
+      alert('No existe un documento asociado para eliminar.');
+      return;
+    }
+
+    try {
+      const storageRef = ref(storage, docInfo.storage);
+      await deleteObject(storageRef).catch(() => undefined);
+
+      const payload: Record<string, string> = { [docInfo.urlKey]: '' };
+      await updateDoc(doc(db, 'vehiculos', vehiculoEditando.id), payload);
+
+      const nuevoFormEdit = { ...formEdit, [docInfo.urlKey]: '' } as FormEditState;
+      setFormEdit(nuevoFormEdit);
+      setVehiculoEditando({ ...vehiculoEditando, [docInfo.urlKey]: '' });
+      setVehiculos(prev => prev.map(v => v.id === vehiculoEditando.id ? { ...v, [docInfo.urlKey]: '' } : v));
+
+      alert(`${docInfo.label} eliminado correctamente.`);
+    } catch (error) {
+      console.error(error);
+      alert('Hubo un error al eliminar el documento.');
+    }
+  };
+
+  const guardarEdicionVehiculo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!vehiculoEditando) return;
+
+    setGuardandoEdicion(true);
+    try {
+      const patenteMayuscula = formEdit.patente.trim().toUpperCase();
+      const updatePayload: any = { ...formEdit, patente: patenteMayuscula };
+
+      const archivos = [
+        { file: pdfRevisionEdit, tipo: 'revision', urlKey: 'urlRevision' },
+        { file: pdfCirculacionEdit, tipo: 'circulacion', urlKey: 'urlCirculacion' },
+        { file: pdfCertificadoEdit, tipo: 'certificado', urlKey: 'urlCertificado' },
+        { file: pdfSoapEdit, tipo: 'soap', urlKey: 'urlSoap' }
+      ];
+
+      for (const item of archivos) {
+        if (!item.file) continue;
+        const route = ref(storage, `documentos/${patenteMayuscula}/${item.tipo}.pdf`);
+        await uploadBytes(route, item.file);
+        const nuevaUrl = await getDownloadURL(route);
+        updatePayload[item.urlKey] = nuevaUrl;
+      }
+
+      await updateDoc(doc(db, 'vehiculos', vehiculoEditando.id), updatePayload);
+      setVehiculos(prev => prev.map(v => v.id === vehiculoEditando.id ? { ...v, ...updatePayload } : v));
+      setVehiculoEditando(null);
+      setPdfRevisionEdit(null);
+      setPdfCirculacionEdit(null);
+      setPdfCertificadoEdit(null);
+      setPdfSoapEdit(null);
+      alert("Vehículo actualizado correctamente.");
+    } catch (error) {
+      console.error(error);
+      alert("Error al actualizar");
+    } finally {
+      setGuardandoEdicion(false);
+    }
   };
 
   const eliminarVehiculo = async (id: string, patente: string) => {
     const confirmar = window.confirm("Estas seguro de que deseas eliminar este vehiculo del sistema?");
-    if (confirmar) {
-      try {
-        await deleteDoc(doc(db, 'vehiculos', id));
-        await logAccion('ELIMINAR_VEHICULO', `Se borró el vehículo de la base de datos: ${patente}`);
-        setVehiculos(prev => prev.filter(v => v.id !== id));
-      } catch (error) {
-        console.error(error);
-      }
-    }
-  };
-
-  const eliminarQR = async (id: string) => {
-    const confirmar = window.confirm("Estas seguro de que deseas eliminar este QR guardado?");
-    if (confirmar) {
-      try {
-        await deleteDoc(doc(db, 'qrs_guardados', id));
-        setQrsGuardados(prev => prev.filter(qr => qr.id !== id));
-      } catch (error) {
-        console.error(error);
-        alert("Hubo un error al eliminar el QR.");
-      }
-    }
-  };
-
-  const sincronizarQRsAntiguos = async () => {
-    const confirmar = window.confirm("Quieres buscar QRs antiguos que no esten en tu lista de vehiculos y agregarlos automaticamente?");
     if (!confirmar) return;
 
-    setSincronizando(true);
     try {
-      const qrsSnap = await getDocs(collection(db, 'qrs_guardados'));
-      const vehsSnap = await getDocs(collection(db, 'vehiculos'));
-      
-      const patentesVehiculos = new Set(vehsSnap.docs.map(doc => doc.data().patente));
-      let agregados = 0;
+      await deleteDoc(doc(db, 'vehiculos', id));
 
-      for (const docQr of qrsSnap.docs) {
-        const dataQr = docQr.data();
-        const patenteQR = dataQr.patente;
-        if (!patentesVehiculos.has(patenteQR)) {
-          const tipoCorregido = dataQr.tipo === 'Semi remolque' ? 'Semirremolque' : (dataQr.tipo || 'Camioneta');
-          await addDoc(collection(db, 'vehiculos'), {
-            patente: patenteQR,
-            tipo: tipoCorregido,
-            vencimientoRevision: '',
-            vencimientoCirculacion: '',
-            vencimientoCertificado: '',
-            kilometrajeActual: '',
-            kilometrajeTaller: '',
-            urlRevision: '',
-            urlCirculacion: '',
-            urlCertificado: '',
-            fechaRegistro: serverTimestamp()
-          });
-          patentesVehiculos.add(patenteQR);
-          agregados++;
-        }
+      const qrsSnap = await getDocs(query(collection(db, 'qrs_guardados'), where('patente', '==', patente)));
+      for (const qrDoc of qrsSnap.docs) {
+        await deleteDoc(doc(db, 'qrs_guardados', qrDoc.id));
       }
 
-      if (agregados > 0) {
-        alert(`Sincronizacion exitosa. Se agregaron ${agregados} vehiculos nuevos desde los QRs.`);
-        cargarVehiculos();
-      } else {
-        alert("Todo esta al dia. No hay QRs antiguos que falten en la lista de vehiculos.");
-      }
+      setQrsGuardados(prev => prev.filter(qr => qr.patente !== patente));
+      await logAccion('ELIMINAR_VEHICULO', `Se borró el vehículo de la base de datos: ${patente}`);
+      setVehiculos(prev => prev.filter(v => v.id !== id));
     } catch (error) {
       console.error(error);
-    } finally {
-      setSincronizando(false);
+    }
+  };
+
+  const depurarQRsHuerfanos = async () => {
+    const vehiculosPatentes = new Set(vehiculos.map(v => v.patente));
+    const qrsHuerfanos = qrsGuardados.filter(qr => !vehiculosPatentes.has(qr.patente));
+
+    if (qrsHuerfanos.length === 0) {
+      alert("No hay QRs huérfanos para depurar.");
+      return;
+    }
+
+    try {
+      for (const qr of qrsHuerfanos) {
+        await deleteDoc(doc(db, 'qrs_guardados', qr.id));
+      }
+
+      setQrsGuardados(prev => prev.filter(qr => vehiculosPatentes.has(qr.patente)));
+      alert(`Se depuraron ${qrsHuerfanos.length} QR(s) huérfano(s).`);
+    } catch (error) {
+      console.error(error);
+      alert("Hubo un error al depurar QRs huérfanos.");
+    }
+  };
+
+  const reconstruirQRsDesdeFlota = async () => {
+    const existentes = new Set(qrsGuardados.map(qr => String(qr.patente || '').trim().toUpperCase()));
+    const nuevos: any[] = [];
+
+    try {
+      for (const vehiculo of vehiculos) {
+        const patente = String(vehiculo.patente || '').trim().toUpperCase();
+        if (!patente || existentes.has(patente)) continue;
+
+        const payload = {
+          patente,
+          tipo: vehiculo.tipo || 'Camioneta',
+          marca: vehiculo.marca || '',
+          modelo: vehiculo.modelo || '',
+          anio: vehiculo.anio || '',
+          url: 'https://gestion-flota-web.vercel.app/v/' + patente,
+          creadoPor: 'admin',
+          creadoPorNombre: 'Administrador General',
+          fechaRegistro: serverTimestamp()
+        };
+
+        const docRef = await addDoc(collection(db, 'qrs_guardados'), payload);
+        existentes.add(patente);
+        nuevos.push({ id: docRef.id, ...payload });
+      }
+
+      if (nuevos.length > 0) {
+        setQrsGuardados(prev => [...nuevos, ...prev]);
+      }
+
+      alert(`Se recuperaron ${nuevos.length} QR(s) de la flota.`);
+    } catch (error) {
+      console.error(error);
+      alert('Hubo un error al reconstruir los QRs desde la flota.');
     }
   };
 
@@ -694,9 +689,8 @@ export default function DashboardAdmin() {
 
   const reportesPaginados = reportesFiltrados.slice(0, limiteReportes);
   const vehiculosPaginados = vehiculosFiltrados.slice(0, limiteVehiculos);
-  const qrsPaginados = qrsFiltrados.slice(0, limiteQRs); 
 
-  const qrsAgrupadosPorUsuario = qrsPaginados.reduce((acc: any, qr: any) => {
+  const qrsAgrupadosPorUsuario = qrsFiltrados.reduce((acc: any, qr: any) => {
     const grupo = qr.creadoPorNombre || 'Administrador General';
     if (!acc[grupo]) {
       acc[grupo] = { detalles: qr.creadoPorDetalles || 'Generado desde el Panel Admin', qrs: [] };
@@ -808,7 +802,7 @@ export default function DashboardAdmin() {
           </div>
           
           <div className="flex gap-4 w-full md:w-auto">
-            <Link to="/generador" className="flex-1 bg-white text-blue-600 border-2 border-blue-600 font-bold py-3 px-6 rounded-xl hover:bg-blue-50 transition-all text-center">Generar QR</Link>
+            <Link to="/generador" className="flex-1 bg-white text-blue-600 border-2 border-blue-600 font-bold py-3 px-6 rounded-xl hover:bg-blue-50 transition-all text-center">Agregar Vehículo</Link>
             <button onClick={manejarCerrarSesion} className="flex-1 bg-slate-200 text-slate-700 font-bold py-3 px-6 rounded-xl hover:bg-slate-300 transition-all text-center">Salir</button>
           </div>
         </div>
@@ -922,205 +916,14 @@ export default function DashboardAdmin() {
 
         {/* CONTENIDO VEHICULOS */}
         {pestanaActiva === 'vehiculos' && (
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-            <div className="bg-white rounded-3xl shadow-lg p-6 border border-slate-100 xl:col-span-1 h-fit">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-bold text-slate-800">Anadir Vehiculo</h2>
-                <button 
-                  type="button" 
-                  onClick={sincronizarQRsAntiguos} 
-                  disabled={sincronizando} 
-                  className="text-xs font-bold bg-indigo-50 text-indigo-600 px-3 py-2 rounded-lg hover:bg-indigo-100 transition-colors border border-indigo-200"
-                >
-                  {sincronizando ? 'Sincronizando...' : 'Sincronizar QRs'}
-                </button>
+          <div className="w-full">
+            <div className="bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-100 w-full min-w-0">
+              <div className="p-6 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
+                <h2 className="text-xl font-bold text-slate-800">Estado de Documentos</h2>
+                <Link to="/generador" className="text-sm bg-blue-600 text-white font-bold px-4 py-2 rounded-xl hover:bg-blue-700"> + Nuevo Vehículo</Link>
               </div>
-              <form onSubmit={registrarOActualizarVehiculo} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-600 mb-1">Patente</label>
-                    <input type="text" value={formVehiculo.patente} onChange={(e) => setFormVehiculo({...formVehiculo, patente: e.target.value})} required placeholder="Ej: AB1234" className="w-full p-3 border border-slate-300 rounded-xl uppercase focus:ring-2 focus:ring-blue-500 focus:outline-none" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-600 mb-1">Tipo</label>
-                    <select value={formVehiculo.tipo} onChange={(e) => setFormVehiculo({...formVehiculo, tipo: e.target.value})} className="w-full p-3 border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                      <option value="Camioneta">Camioneta</option>
-                      <option value="Tracto camión">Tracto camión</option>
-                      <option value="Semirremolque">Semirremolque</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 pt-2">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">Marca</label>
-                    <input type="text" value={marca} onChange={(e) => setMarca(e.target.value)} placeholder="Ej: Ford" className="w-full p-3 border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none" />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">Modelo</label>
-                    <input type="text" value={modelo} onChange={(e) => setModelo(e.target.value)} placeholder="Ej: Ranger" className="w-full p-3 border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none" />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 pt-2">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">Año</label>
-                    <input type="number" value={anio} onChange={(e) => setAnio(e.target.value === '' ? '' : Number(e.target.value))} placeholder="Ej: 2024" className="w-full p-3 border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none" />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">Responsable</label>
-                    <select value={ownerId} onChange={(e) => setOwnerId(e.target.value)} className="w-full p-3 border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                      <option value="">Seleccionar responsable...</option>
-                      <optgroup label="Administradores (Acceso Total)">
-                        {usuariosRegistrados.filter(user => user.rol === 'admin').map(user => (
-                          <option key={user.id} value={user.email}>{user.email}</option>
-                        ))}
-                        {auth.currentUser?.email && (
-                          <option value={auth.currentUser.email}>{auth.currentUser.email}</option>
-                        )}
-                      </optgroup>
-                      <optgroup label="Generadores / Clientes de Flota">
-                        {usuariosRegistrados.filter(user => user.rol === 'generador_qr').map(user => (
-                          <option key={user.id} value={user.id || user.email}>{user.razonSocial || user.email}</option>
-                        ))}
-                      </optgroup>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 pt-2">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">Km Actual</label>
-                    <input type="number" value={formVehiculo.kilometrajeActual} onChange={(e) => setFormVehiculo({...formVehiculo, kilometrajeActual: e.target.value})} placeholder="Ej: 15000" className="w-full p-3 border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none" />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">Prox. Taller</label>
-                    <input type="number" value={formVehiculo.kilometrajeTaller} onChange={(e) => setFormVehiculo({...formVehiculo, kilometrajeTaller: e.target.value})} placeholder="Ej: 25000" className="w-full p-3 border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none" />
-                  </div>
-                </div>
-                
-                <div className="pt-2 border-t border-slate-100">
-                  <label className="block text-sm font-medium text-slate-600 mb-1">Rev. Tecnica</label>
-                  <input type="date" value={formVehiculo.vencimientoRevision} onChange={(e) => setFormVehiculo({...formVehiculo, vencimientoRevision: e.target.value})} required className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none text-slate-700 mb-2" />
-                  
-                  <div className="flex flex-col gap-2">
-                    {!pdfRevision ? (
-                      <label className="cursor-pointer bg-blue-50 text-blue-600 px-4 py-2 rounded-xl text-sm font-bold border border-blue-200 hover:bg-blue-100 transition-colors text-center">
-                        Seleccionar PDF
-                        <input type="file" id="file-rev" accept="application/pdf" onChange={(e) => setPdfRevision(e.target.files ? e.target.files[0] : null)} className="hidden" />
-                      </label>
-                    ) : (
-                      <div className="flex items-center justify-between bg-slate-100 p-2 rounded-xl border border-slate-200">
-                        <span className="text-xs text-slate-600 truncate max-w-[150px] font-medium">{pdfRevision.name}</span>
-                        <button type="button" onClick={() => { setPdfRevision(null); const el = document.getElementById('file-rev') as HTMLInputElement; if (el) el.value = ''; }} className="text-xs text-red-500 font-bold hover:underline bg-red-50 px-2 py-1 rounded">Quitar</button>
-                      </div>
-                    )}
-                    {formVehiculo.urlRevision && !pdfRevision && (
-                      <div className="flex flex-col gap-2 bg-green-50 p-2 rounded-xl border border-green-200">
-                        <span className="text-xs text-green-700 font-bold text-center">PDF Actual Guardado</span>
-                        <button type="button" onClick={() => forzarDescarga(formVehiculo.urlRevision, `Revision_${formVehiculo.patente}.pdf`)} className="w-full text-xs bg-white text-green-700 px-3 py-2 rounded-lg shadow-sm font-bold hover:bg-green-100 border border-green-200 flex items-center justify-center gap-1">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                          Descargar
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                
-                <div className="pt-4 border-t border-slate-100 mt-2">
-                  <label className="block text-sm font-medium text-slate-600 mb-1">Permiso Circulacion</label>
-                  <input type="date" value={formVehiculo.vencimientoCirculacion} onChange={(e) => setFormVehiculo({...formVehiculo, vencimientoCirculacion: e.target.value})} required className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none text-slate-700 mb-2" />
-                  
-                  <div className="flex flex-col gap-2">
-                    {!pdfCirculacion ? (
-                      <label className="cursor-pointer bg-blue-50 text-blue-600 px-4 py-2 rounded-xl text-sm font-bold border border-blue-200 hover:bg-blue-100 transition-colors text-center">
-                        Seleccionar PDF
-                        <input type="file" id="file-circ" accept="application/pdf" onChange={(e) => setPdfCirculacion(e.target.files ? e.target.files[0] : null)} className="hidden" />
-                      </label>
-                    ) : (
-                      <div className="flex items-center justify-between bg-slate-100 p-2 rounded-xl border border-slate-200">
-                        <span className="text-xs text-slate-600 truncate max-w-[150px] font-medium">{pdfCirculacion.name}</span>
-                        <button type="button" onClick={() => { setPdfCirculacion(null); const el = document.getElementById('file-circ') as HTMLInputElement; if (el) el.value = ''; }} className="text-xs text-red-500 font-bold hover:underline bg-red-50 px-2 py-1 rounded">Quitar</button>
-                      </div>
-                    )}
-                    {formVehiculo.urlCirculacion && !pdfCirculacion && (
-                      <div className="flex flex-col gap-2 bg-green-50 p-2 rounded-xl border border-green-200">
-                        <span className="text-xs text-green-700 font-bold text-center">PDF Actual Guardado</span>
-                        <button type="button" onClick={() => forzarDescarga(formVehiculo.urlCirculacion, `Circulacion_${formVehiculo.patente}.pdf`)} className="w-full text-xs bg-white text-green-700 px-3 py-2 rounded-lg shadow-sm font-bold hover:bg-green-100 border border-green-200 flex items-center justify-center gap-1">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                          Descargar
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                
-                <div className="pt-4 border-t border-slate-100 mt-2">
-                  <label className="block text-sm font-medium text-slate-600 mb-1">Certificado Mantención</label>
-                  <input type="date" value={formVehiculo.vencimientoCertificado} onChange={(e) => setFormVehiculo({...formVehiculo, vencimientoCertificado: e.target.value})} className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none text-slate-700 mb-2" />
-                  
-                  <div className="flex flex-col gap-2">
-                    {!pdfCertificado ? (
-                      <label className="cursor-pointer bg-blue-50 text-blue-600 px-4 py-2 rounded-xl text-sm font-bold border border-blue-200 hover:bg-blue-100 transition-colors text-center">
-                        Seleccionar PDF
-                        <input type="file" id="file-cert" accept="application/pdf" onChange={(e) => setPdfCertificado(e.target.files ? e.target.files[0] : null)} className="hidden" />
-                      </label>
-                    ) : (
-                      <div className="flex items-center justify-between bg-slate-100 p-2 rounded-xl border border-slate-200">
-                        <span className="text-xs text-slate-600 truncate max-w-[150px] font-medium">{pdfCertificado.name}</span>
-                        <button type="button" onClick={() => { setPdfCertificado(null); const el = document.getElementById('file-cert') as HTMLInputElement; if (el) el.value = ''; }} className="text-xs text-red-500 font-bold hover:underline bg-red-50 px-2 py-1 rounded">Quitar</button>
-                      </div>
-                    )}
-                    {formVehiculo.urlCertificado && !pdfCertificado && (
-                      <div className="flex flex-col gap-2 bg-green-50 p-2 rounded-xl border border-green-200">
-                        <span className="text-xs text-green-700 font-bold text-center">PDF Actual Guardado</span>
-                        <button type="button" onClick={() => forzarDescarga(formVehiculo.urlCertificado, `CertificadoMantencion_${formVehiculo.patente}.pdf`)} className="w-full text-xs bg-white text-green-700 px-3 py-2 rounded-lg shadow-sm font-bold hover:bg-green-100 border border-green-200 flex items-center justify-center gap-1">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                          Descargar
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="pt-4 border-t border-slate-100 mt-2">
-                  <label className="block text-sm font-medium text-slate-600 mb-1">SOAP</label>
-                  <input type="date" value={formVehiculo.vencimientoSoap} onChange={(e) => setFormVehiculo({...formVehiculo, vencimientoSoap: e.target.value})} className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none text-slate-700 mb-2" />
-                  <div className="flex flex-col gap-2">
-                    {!pdfSoap ? (
-                      <label className="cursor-pointer bg-blue-50 text-blue-600 px-4 py-2 rounded-xl text-sm font-bold border border-blue-200 hover:bg-blue-100 transition-colors text-center">
-                        Seleccionar PDF
-                        <input type="file" id="file-soap" accept="application/pdf" onChange={(e) => setPdfSoap(e.target.files ? e.target.files[0] : null)} className="hidden" />
-                      </label>
-                    ) : (
-                      <div className="flex items-center justify-between bg-slate-100 p-2 rounded-xl border border-slate-200">
-                        <span className="text-xs text-slate-600 truncate max-w-[150px] font-medium">{pdfSoap.name}</span>
-                        <button type="button" onClick={() => { setPdfSoap(null); const el = document.getElementById('file-soap') as HTMLInputElement; if (el) el.value = ''; }} className="text-xs text-red-500 font-bold hover:underline bg-red-50 px-2 py-1 rounded">Quitar</button>
-                      </div>
-                    )}
-                    {formVehiculo.urlSoap && !pdfSoap && (
-                      <div className="flex flex-col gap-2 bg-green-50 p-2 rounded-xl border border-green-200">
-                        <span className="text-xs text-green-700 font-bold text-center">PDF Actual Guardado</span>
-                        <button type="button" onClick={() => forzarDescarga(formVehiculo.urlSoap, `SOAP_${formVehiculo.patente}.pdf`)} className="w-full text-xs bg-white text-green-700 px-3 py-2 rounded-lg shadow-sm font-bold hover:bg-green-100 border border-green-200 flex items-center justify-center gap-1">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                          Descargar
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex gap-2 mt-6 pt-4">
-                  <button type="submit" disabled={guardandoVehiculo} className="flex-1 bg-slate-800 text-white font-bold py-3 rounded-xl hover:bg-slate-900 transition-all">{guardandoVehiculo ? 'Guardando...' : 'Guardar Datos'}</button>
-                  <button type="button" onClick={() => setFormVehiculo({ patente: '', tipo: 'Camioneta', vencimientoRevision: '', vencimientoCirculacion: '', vencimientoCertificado: '', vencimientoSoap: '', kilometrajeActual: '', kilometrajeTaller: '', urlRevision: '', urlCirculacion: '', urlCertificado: '', urlSoap: '' })} className="px-4 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition-all">Limpiar</button>
-                </div>
-              </form>
-            </div>
-            
-            <div className="bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-100 xl:col-span-2">
-              <div className="p-6 bg-slate-50 border-b border-slate-100 flex justify-between items-center"><h2 className="text-xl font-bold text-slate-800">Estado de Documentos</h2></div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
+              <div className="hidden md:block overflow-x-auto w-full">
+                <table className="w-full text-left border-collapse min-w-[1100px] whitespace-nowrap">
                   <thead>
                     <tr className="bg-white text-slate-600 text-xs uppercase tracking-wider border-b border-slate-100">
                       <th className="p-4 font-bold">Vehiculo</th><th className="p-4 font-bold">Rev. Tecnica</th><th className="p-4 font-bold">Permiso Circ.</th><th className="p-4 font-bold">Certificado Mantención</th><th className="p-4 font-bold">SOAP</th><th className="p-4 font-bold text-center">Acciones</th>
@@ -1238,66 +1041,77 @@ export default function DashboardAdmin() {
         {/* CONTENIDO QRS (AGRUPADOS POR USUARIO) */}
         {pestanaActiva === 'qrs' && (
           <div className="space-y-12">
+            <div className="flex justify-end gap-3">
+              <button onClick={depurarQRsHuerfanos} className="text-xs bg-rose-50 text-rose-600 font-bold px-3 py-2 rounded-xl border border-rose-200 hover:bg-rose-100">Depurar QRs Huérfanos</button>
+              <button 
+                onClick={reconstruirQRsDesdeFlota} 
+                className="text-xs bg-indigo-50 text-indigo-600 font-bold px-3.5 py-2 rounded-xl border border-indigo-200 hover:bg-indigo-100 transition-colors"
+              >
+                Reconstruir QRs de Flota
+              </button>
+            </div>
+
             {Object.keys(qrsAgrupadosPorUsuario).length === 0 ? (
               <div className="bg-white p-12 rounded-3xl shadow-lg text-center border border-slate-100">
                 <p className="text-slate-500 text-lg">No se encontraron codigos QR guardados.</p>
               </div>
             ) : (
-              Object.entries(qrsAgrupadosPorUsuario).map(([grupo, dataGrupo]: any) => (
-                <div key={grupo} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-                  <div className="border-b border-slate-100 pb-4 mb-6">
-                    <h2 className="text-xl font-black text-slate-800">{grupo}</h2>
-                    <p className="text-sm font-medium text-slate-500 mt-1">{dataGrupo.detalles}</p>
-                    <div className="inline-block bg-purple-100 text-purple-700 text-xs font-bold px-3 py-1 rounded-lg mt-2">
-                      Total Creados: {dataGrupo.qrs.length}
+              Object.entries(qrsAgrupadosPorUsuario).map(([grupo, dataGrupo]: any) => {
+                const limiteActual = limitesQR[grupo] || 6;
+                return (
+                  <div key={grupo} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
+                    <div className="border-b border-slate-100 pb-4 mb-6">
+                      <h2 className="text-xl font-black text-slate-800">{grupo}</h2>
+                      <p className="text-sm font-medium text-slate-500 mt-1">{dataGrupo.detalles}</p>
+                      <div className="inline-block bg-purple-100 text-purple-700 text-xs font-bold px-3 py-1 rounded-lg mt-2">
+                        Total Creados: {dataGrupo.qrs.length}
+                      </div>
                     </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {dataGrupo.qrs.map((qr: any) => {
-                      const urlCorregida = qr.url?.replace(/http:\/\/(localhost|127\.0\.0\.1)(:\d+)?/g, 'https://gestion-flota-web.vercel.app') || '';
-                      return (
-                        <div key={qr.id} className="flex flex-col gap-2 relative bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                          <div className="flex flex-col items-center">
-                            <h3 className="text-2xl font-black text-slate-800 tracking-widest">{qr.patente}</h3>
-                            <p className="text-[10px] text-slate-500 font-bold uppercase mb-4">{qr.tipo || 'Control de Flota'}</p>
-                            <div className="bg-white p-2 rounded-xl border-2 border-slate-200 mb-4 shadow-sm">
-                              <QRCodeSVG value={urlCorregida} size={100} level="H" includeMargin={false} />
-                            </div>
-                          </div>
-
-                          <div style={{ position: 'absolute', top: 0, left: 0, opacity: 0, pointerEvents: 'none', zIndex: -50 }}>
-                            <div id={`tarjeta-pdf-${qr.patente}`} className="bg-white p-8 flex flex-col items-center justify-center" style={{ width: '400px', height: '600px', backgroundColor: 'white' }}>
-                              <img src={LOGO_BASE64} alt="Logo Empresa" style={{ height: '90px', objectFit: 'contain', marginBottom: '30px' }} />
-                              <h2 className="text-5xl font-black text-slate-800 mb-2 tracking-widest">{qr.patente}</h2>
-                              <p className="text-lg text-slate-500 font-bold uppercase tracking-widest mb-10">{qr.tipo || 'Control de Flota'}</p>
-                              <div className="bg-white p-4 rounded-3xl border-8 border-slate-800 mb-8 shadow-xl">
-                                <QRCodeSVG value={urlCorregida} size={220} level="H" includeMargin={false} />
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {dataGrupo.qrs.slice(0, limiteActual).map((qr: any) => {
+                        const urlCorregida = qr.url?.replace(/http:\/\/(localhost|127\.0\.0\.1)(:\d+)?/g, 'https://gestion-flota-web.vercel.app') || '';
+                        return (
+                          <div key={qr.id} className="flex flex-col gap-2 relative bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                            <div className="flex flex-col items-center">
+                              <h3 className="text-2xl font-black text-slate-800 tracking-widest">{qr.patente}</h3>
+                              <p className="text-[10px] text-slate-500 font-bold uppercase mb-4">{qr.tipo || 'Control de Flota'}</p>
+                              <div className="bg-white p-2 rounded-xl border-2 border-slate-200 mb-4 shadow-sm">
+                                <QRCodeSVG value={urlCorregida} size={100} level="H" includeMargin={false} />
                               </div>
-                              <p className="text-slate-500 font-bold text-center">Escanee este codigo para iniciar el checklist.</p>
+                            </div>
+
+                            <div style={{ position: 'absolute', top: 0, left: 0, opacity: 0, pointerEvents: 'none', zIndex: -50 }}>
+                              <div id={`tarjeta-pdf-${qr.patente}`} className="bg-white p-8 flex flex-col items-center justify-center" style={{ width: '400px', height: '600px', backgroundColor: 'white' }}>
+                                <img src={LOGO_BASE64} alt="Logo Empresa" style={{ height: '90px', objectFit: 'contain', marginBottom: '30px' }} />
+                                <h2 className="text-5xl font-black text-slate-800 mb-2 tracking-widest">{qr.patente}</h2>
+                                <p className="text-lg text-slate-500 font-bold uppercase tracking-widest mb-10">{qr.tipo || 'Control de Flota'}</p>
+                                <div className="bg-white p-4 rounded-3xl border-8 border-slate-800 mb-8 shadow-xl">
+                                  <QRCodeSVG value={urlCorregida} size={220} level="H" includeMargin={false} />
+                                </div>
+                                <p className="text-slate-500 font-bold text-center">Escanee este codigo para iniciar el checklist.</p>
+                              </div>
+                            </div>
+
+                            <div className="flex gap-2 w-full mt-2 relative z-10">
+                              <button onClick={() => descargarPDF(qr.patente)} disabled={generandoPdf === qr.patente} className="flex-1 bg-slate-800 text-white font-bold py-2 rounded-xl hover:bg-slate-900 transition-colors shadow-sm text-xs">
+                                {generandoPdf === qr.patente ? '...' : 'Descargar'}
+                              </button>
+                              <a href={urlCorregida} target="_blank" rel="noreferrer" className="flex-1 text-center bg-blue-50 text-blue-600 font-bold py-2 rounded-xl hover:bg-blue-100 transition-colors text-xs flex items-center justify-center">Probar</a>
                             </div>
                           </div>
+                        );
+                      })}
+                    </div>
 
-                          <div className="flex gap-2 w-full mt-2 relative z-10">
-                            <button onClick={() => descargarPDF(qr.patente)} disabled={generandoPdf === qr.patente} className="flex-1 bg-slate-800 text-white font-bold py-2 rounded-xl hover:bg-slate-900 transition-colors shadow-sm text-xs">
-                              {generandoPdf === qr.patente ? '...' : 'Descargar'}
-                            </button>
-                            <a href={urlCorregida} target="_blank" rel="noreferrer" className="flex-1 text-center bg-blue-50 text-blue-600 font-bold py-2 rounded-xl hover:bg-blue-100 transition-colors text-xs flex items-center justify-center">Probar</a>
-                          </div>
-                          
-                          <button onClick={() => eliminarQR(qr.id)} className="w-full bg-red-50 text-red-600 font-bold py-2 rounded-xl hover:bg-red-100 transition-colors relative z-10 text-xs">Eliminar QR</button>
-                        </div>
-                      );
-                    })}
+                    {dataGrupo.qrs.length > limiteActual && (
+                      <div className="mt-6 text-center">
+                        <button onClick={() => setLimitesQR(prev => ({ ...prev, [grupo]: limiteActual + 6 }))} className="px-8 py-3 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl shadow-sm hover:bg-slate-100 transition-colors">Mostrar más</button>
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))
-            )}
-            
-            {qrsFiltrados.length > limiteQRs && (
-              <div className="mt-8 text-center">
-                <button onClick={() => setLimiteQRs(prev => prev + 12)} className="px-8 py-3 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl shadow-sm hover:bg-slate-100 transition-colors">Mostrar mas QRs</button>
-              </div>
+                );
+              })
             )}
           </div>
         )}
@@ -1613,7 +1427,8 @@ export default function DashboardAdmin() {
 
             <div className="bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-100 xl:col-span-2">
               <div className="p-6 bg-slate-50 border-b border-slate-100 flex justify-between items-center"><h2 className="text-xl font-bold text-slate-800">Cuentas Registradas</h2></div>
-              <div className="overflow-x-auto">
+
+              <div className="hidden md:block overflow-x-auto w-full">
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-white text-slate-600 text-xs uppercase tracking-wider border-b border-slate-100">
@@ -1661,6 +1476,47 @@ export default function DashboardAdmin() {
                   </tbody>
                 </table>
               </div>
+
+              <div className="flex flex-col md:hidden gap-4 p-4">
+                {usuariosRegistrados.length === 0 ? (
+                  <div className="bg-white rounded-2xl border border-slate-200 p-4 text-slate-400 text-center">Cargando usuarios...</div>
+                ) : (
+                  usuariosRegistrados.map((user) => (
+                    <div key={user.id} className="bg-white rounded-2xl border border-slate-200 p-4">
+                      <div className="flex justify-between items-start gap-3">
+                        <span className="font-black text-slate-800 text-sm break-all">{user.email}</span>
+                        <span className={`text-[10px] uppercase font-black px-2 py-1 rounded-full inline-block ${
+                          user.rol === 'admin' ? 'bg-indigo-100 text-indigo-700' : 
+                          user.rol === 'taller' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
+                        }`}>{user.rol}</span>
+                      </div>
+
+                      <div className="mt-3 text-sm text-slate-600">
+                        {user.rol === 'taller' ? (
+                          <div>
+                            <p className="font-black text-blue-700">{user.nombreTaller || 'Sin nombre'}</p>
+                            <p className="text-slate-500 font-medium text-xs">{user.especialidadTaller}</p>
+                            <p className="text-slate-500 text-xs">{user.ciudadTaller ? `${user.direccionTaller}, ${user.ciudadTaller}` : user.ubicacionTaller}</p>
+                          </div>
+                        ) : user.rol === 'generador_qr' ? (
+                          <div>
+                            <p className="font-black text-purple-700">{user.razonSocial || 'Empresa No Definida'}</p>
+                            <p className="text-slate-500 font-medium text-xs">Plan: {user.limiteQR} QRs | Dir: {user.direccion || 'N/A'}</p>
+                            <p className="text-slate-500 font-medium text-xs">Tel: {user.telefono || 'N/A'}</p>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-slate-400 italic">Acceso Total</span>
+                        )}
+                      </div>
+
+                      <div className="mt-4 grid grid-cols-2 gap-2">
+                        <button onClick={() => editarUsuario(user)} className="w-full text-xs font-bold px-3 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors">Editar</button>
+                        <button onClick={() => eliminarUsuario(user.id, user.email)} className="w-full text-xs font-bold px-3 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors">Borrar</button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -1672,7 +1528,8 @@ export default function DashboardAdmin() {
               <h2 className="text-xl font-bold text-slate-800">Historial de Auditoría</h2>
               <p className="text-sm text-slate-500 mt-1">Registro inmutable de todas las acciones importantes realizadas en la plataforma.</p>
             </div>
-            <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
+
+            <div className="hidden md:block overflow-x-auto w-full max-h-[600px] overflow-y-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-100 text-slate-600 text-xs uppercase tracking-wider sticky top-0 shadow-sm">
@@ -1703,6 +1560,155 @@ export default function DashboardAdmin() {
                   )}
                 </tbody>
               </table>
+            </div>
+
+            <div className="flex flex-col md:hidden gap-4 p-4">
+              {historialAcciones.length === 0 ? (
+                <div className="bg-white rounded-2xl border border-slate-200 p-4 text-slate-400 text-center">No hay registros de auditoría.</div>
+              ) : (
+                historialAcciones.map((log) => (
+                  <div key={log.id} className="bg-white rounded-2xl border border-slate-200 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-xs font-mono text-slate-500">{log.fecha ? log.fecha.toDate().toLocaleString() : 'Reciente'}</span>
+                      <span className="bg-slate-200 text-slate-700 text-[10px] font-black uppercase px-2 py-1 rounded">
+                        {log.accion.replace(/_/g, ' ')}
+                      </span>
+                    </div>
+                    <div className="mt-3">
+                      <p className="text-sm font-black text-slate-800">Usuario: {log.usuario}</p>
+                      <p className="text-sm text-slate-600 mt-1">Detalles: {log.detalles}</p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {vehiculoEditando && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+            <div className="bg-white rounded-3xl p-8 w-full max-w-2xl shadow-2xl">
+              <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-6">
+                <h3 className="text-2xl font-black text-slate-800">Editar Vehículo</h3>
+                <button onClick={() => setVehiculoEditando(null)} className="text-slate-500 hover:text-slate-800 font-bold">✕</button>
+              </div>
+
+              <form onSubmit={guardarEdicionVehiculo} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-black text-slate-400 uppercase mb-2">Tipo</label>
+                    <select value={formEdit.tipo} onChange={(e) => setFormEdit({ ...formEdit, tipo: e.target.value })} className="w-full p-3 border border-slate-200 rounded-xl">
+                      <option>Camioneta</option>
+                      <option>Tracto camión</option>
+                      <option>Semirremolque</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-black text-slate-400 uppercase mb-2">Patente</label>
+                    <input type="text" value={formEdit.patente} onChange={(e) => setFormEdit({ ...formEdit, patente: e.target.value })} className="w-full p-3 border border-slate-200 rounded-xl" />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-black text-slate-400 uppercase mb-2">Marca</label>
+                    <input type="text" value={formEdit.marca} onChange={(e) => setFormEdit({ ...formEdit, marca: e.target.value })} className="w-full p-3 border border-slate-200 rounded-xl" />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-black text-slate-400 uppercase mb-2">Modelo</label>
+                    <input type="text" value={formEdit.modelo} onChange={(e) => setFormEdit({ ...formEdit, modelo: e.target.value })} className="w-full p-3 border border-slate-200 rounded-xl" />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-black text-slate-400 uppercase mb-2">Año</label>
+                    <input type="text" value={formEdit.anio} onChange={(e) => setFormEdit({ ...formEdit, anio: e.target.value })} className="w-full p-3 border border-slate-200 rounded-xl" />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-black text-slate-400 uppercase mb-2">OwnerId</label>
+                    <input type="text" value={formEdit.ownerId} onChange={(e) => setFormEdit({ ...formEdit, ownerId: e.target.value })} className="w-full p-3 border border-slate-200 rounded-xl" />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-black text-slate-400 uppercase mb-2">Km Actual</label>
+                    <input type="text" value={formEdit.kilometrajeActual} onChange={(e) => setFormEdit({ ...formEdit, kilometrajeActual: e.target.value })} className="w-full p-3 border border-slate-200 rounded-xl" />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-black text-slate-400 uppercase mb-2">Próx Taller</label>
+                    <input type="text" value={formEdit.kilometrajeTaller} onChange={(e) => setFormEdit({ ...formEdit, kilometrajeTaller: e.target.value })} className="w-full p-3 border border-slate-200 rounded-xl" />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-black text-slate-400 uppercase mb-2">Venc. Revisión</label>
+                    <input type="date" value={formEdit.vencimientoRevision} onChange={(e) => setFormEdit({ ...formEdit, vencimientoRevision: e.target.value })} className="w-full p-3 border border-slate-200 rounded-xl" />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-black text-slate-400 uppercase mb-2">Venc. Circulación</label>
+                    <input type="date" value={formEdit.vencimientoCirculacion} onChange={(e) => setFormEdit({ ...formEdit, vencimientoCirculacion: e.target.value })} className="w-full p-3 border border-slate-200 rounded-xl" />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-black text-slate-400 uppercase mb-2">Venc. Certificado</label>
+                    <input type="date" value={formEdit.vencimientoCertificado} onChange={(e) => setFormEdit({ ...formEdit, vencimientoCertificado: e.target.value })} className="w-full p-3 border border-slate-200 rounded-xl" />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-black text-slate-400 uppercase mb-2">Venc. SOAP</label>
+                    <input type="date" value={formEdit.vencimientoSoap} onChange={(e) => setFormEdit({ ...formEdit, vencimientoSoap: e.target.value })} className="w-full p-3 border border-slate-200 rounded-xl" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                  <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                    <div className="flex justify-between items-center gap-2">
+                      <label className="block text-xs font-black text-slate-400 uppercase mb-2">Rev. Técnica</label>
+                      {formEdit.urlRevision && (
+                        <button type="button" onClick={() => eliminarDocumentoVehiculo('revision')} className="text-[11px] font-black px-3 py-1.5 rounded-lg bg-red-50 text-red-600 border border-red-200 hover:bg-red-100">Eliminar Documento</button>
+                      )}
+                    </div>
+                    <input type="file" accept="application/pdf" onChange={(e) => setPdfRevisionEdit(e.target.files?.[0] ?? null)} className="w-full text-sm text-slate-600" />
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                    <div className="flex justify-between items-center gap-2">
+                      <label className="block text-xs font-black text-slate-400 uppercase mb-2">Permiso Circulación</label>
+                      {formEdit.urlCirculacion && (
+                        <button type="button" onClick={() => eliminarDocumentoVehiculo('circulacion')} className="text-[11px] font-black px-3 py-1.5 rounded-lg bg-red-50 text-red-600 border border-red-200 hover:bg-red-100">Eliminar Documento</button>
+                      )}
+                    </div>
+                    <input type="file" accept="application/pdf" onChange={(e) => setPdfCirculacionEdit(e.target.files?.[0] ?? null)} className="w-full text-sm text-slate-600" />
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                    <div className="flex justify-between items-center gap-2">
+                      <label className="block text-xs font-black text-slate-400 uppercase mb-2">Certificado Mantención</label>
+                      {formEdit.urlCertificado && (
+                        <button type="button" onClick={() => eliminarDocumentoVehiculo('certificado')} className="text-[11px] font-black px-3 py-1.5 rounded-lg bg-red-50 text-red-600 border border-red-200 hover:bg-red-100">Eliminar Documento</button>
+                      )}
+                    </div>
+                    <input type="file" accept="application/pdf" onChange={(e) => setPdfCertificadoEdit(e.target.files?.[0] ?? null)} className="w-full text-sm text-slate-600" />
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                    <div className="flex justify-between items-center gap-2">
+                      <label className="block text-xs font-black text-slate-400 uppercase mb-2">SOAP</label>
+                      {formEdit.urlSoap && (
+                        <button type="button" onClick={() => eliminarDocumentoVehiculo('soap')} className="text-[11px] font-black px-3 py-1.5 rounded-lg bg-red-50 text-red-600 border border-red-200 hover:bg-red-100">Eliminar Documento</button>
+                      )}
+                    </div>
+                    <input type="file" accept="application/pdf" onChange={(e) => setPdfSoapEdit(e.target.files?.[0] ?? null)} className="w-full text-sm text-slate-600" />
+                  </div>
+                </div>
+
+                <div className="flex gap-3 justify-end pt-4">
+                  <button type="button" onClick={() => setVehiculoEditando(null)} className="bg-slate-200 text-slate-700 font-bold px-5 py-3 rounded-xl hover:bg-slate-300">Cancelar</button>
+                  <button type="submit" disabled={guardandoEdicion} className="bg-blue-600 text-white font-bold px-5 py-3 rounded-xl hover:bg-blue-700 disabled:bg-slate-400">
+                    {guardandoEdicion ? 'Guardando...' : 'Guardar Cambios'}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}

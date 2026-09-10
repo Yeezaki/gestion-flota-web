@@ -18,11 +18,6 @@ export default function GeneradorQR() {
   const [kilometrajeActual, setKilometrajeActual] = useState('');
   const [kilometrajeTaller, setKilometrajeTaller] = useState('');
 
-  const [vencimientoRevision, setVencimientoRevision] = useState('');
-  const [vencimientoCirculacion, setVencimientoCirculacion] = useState('');
-  const [vencimientoCertificado, setVencimientoCertificado] = useState('');
-  const [vencimientoSoap, setVencimientoSoap] = useState('');
-
   const [pdfRevision, setPdfRevision] = useState<File | null>(null);
   const [pdfCirculacion, setPdfCirculacion] = useState<File | null>(null);
   const [pdfCertificado, setPdfCertificado] = useState<File | null>(null);
@@ -42,10 +37,6 @@ export default function GeneradorQR() {
     setOwnerId(auth.currentUser?.email || '');
     setKilometrajeActual('');
     setKilometrajeTaller('');
-    setVencimientoRevision('');
-    setVencimientoCirculacion('');
-    setVencimientoCertificado('');
-    setVencimientoSoap('');
     setPdfRevision(null);
     setPdfCirculacion(null);
     setPdfCertificado(null);
@@ -106,10 +97,10 @@ export default function GeneradorQR() {
         ownerId: ownerId || auth.currentUser?.email || 'admin_general',
         kilometrajeActual,
         kilometrajeTaller,
-        vencimientoRevision,
-        vencimientoCirculacion,
-        vencimientoCertificado,
-        vencimientoSoap,
+        vencimientoRevision: '',
+        vencimientoCirculacion: '',
+        vencimientoCertificado: '',
+        vencimientoSoap: '',
         urlRevision,
         urlCirculacion,
         urlCertificado,
@@ -212,19 +203,10 @@ export default function GeneradorQR() {
           <div className="lg:col-span-7 bg-white p-8 rounded-3xl shadow-2xl border border-slate-100">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-6">
               <div>
-                <h2 className="text-2xl font-black text-slate-800">Agregar Nuevo Vehículo a la Flota</h2>
+                <h2 className="text-2xl font-black text-slate-800">Central de Ingreso de Vehículos</h2>
                 <p className="text-sm text-slate-500 mt-1">Registro técnico y documentos</p>
               </div>
-              <div className="flex items-center gap-2">
-                <button 
-                  type="button" 
-                  onClick={() => window.history.back()} 
-                  className="flex items-center gap-2 text-sm font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-4 py-2 rounded-xl transition-all"
-                >
-                  ← Volver a Flota
-                </button>
-                <Link to="/admin" className="text-slate-500 font-bold hover:text-slate-800 transition-colors">Volver a la Flota</Link>
-              </div>
+              <Link to="/admin" className="text-slate-500 font-bold hover:text-slate-800 transition-colors">Volver al Panel Admin</Link>
             </div>
 
             <form onSubmit={guardarYDescargar} className="space-y-6">
@@ -277,78 +259,36 @@ export default function GeneradorQR() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col gap-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-black text-slate-800 text-xs uppercase">Rev. Técnica</span>
-                    {pdfRevision && (
-                      <button type="button" onClick={() => setPdfRevision(null)} className="text-[10px] font-black px-2 py-1 rounded-full bg-red-50 text-red-600 border border-red-200 hover:bg-red-100">×</button>
-                    )}
-                  </div>
-                  <input type="date" value={vencimientoRevision} onChange={(e) => setVencimientoRevision(e.target.value)} className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-blue-500" />
-                  <label className="cursor-pointer flex flex-col items-center justify-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-3 transition-all hover:bg-blue-50">
-                    <span className="text-[11px] font-bold text-slate-600">Seleccionar PDF</span>
-                    <input type="file" accept="application/pdf" onChange={(e) => setPdfRevision(e.target.files?.[0] ?? null)} className="hidden" />
-                    {pdfRevision && <span className="text-[10px] font-bold text-blue-700">{pdfRevision.name}</span>}
-                  </label>
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                  <label className="block text-xs font-black text-slate-400 uppercase mb-2 ml-1">Rev. Técnica</label>
+                  <input type="file" accept="application/pdf" onChange={(e) => setPdfRevision(e.target.files?.[0] ?? null)} className="w-full text-sm text-slate-600" />
                 </div>
-
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col gap-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-black text-slate-800 text-xs uppercase">Permiso Circulación</span>
-                    {pdfCirculacion && (
-                      <button type="button" onClick={() => setPdfCirculacion(null)} className="text-[10px] font-black px-2 py-1 rounded-full bg-red-50 text-red-600 border border-red-200 hover:bg-red-100">×</button>
-                    )}
-                  </div>
-                  <input type="date" value={vencimientoCirculacion} onChange={(e) => setVencimientoCirculacion(e.target.value)} className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-blue-500" />
-                  <label className="cursor-pointer flex flex-col items-center justify-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-3 transition-all hover:bg-blue-50">
-                    <span className="text-[11px] font-bold text-slate-600">Seleccionar PDF</span>
-                    <input type="file" accept="application/pdf" onChange={(e) => setPdfCirculacion(e.target.files?.[0] ?? null)} className="hidden" />
-                    {pdfCirculacion && <span className="text-[10px] font-bold text-blue-700">{pdfCirculacion.name}</span>}
-                  </label>
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                  <label className="block text-xs font-black text-slate-400 uppercase mb-2 ml-1">Permiso Circulación</label>
+                  <input type="file" accept="application/pdf" onChange={(e) => setPdfCirculacion(e.target.files?.[0] ?? null)} className="w-full text-sm text-slate-600" />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col gap-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-black text-slate-800 text-xs uppercase">Certificado Mantención</span>
-                    {pdfCertificado && (
-                      <button type="button" onClick={() => setPdfCertificado(null)} className="text-[10px] font-black px-2 py-1 rounded-full bg-red-50 text-red-600 border border-red-200 hover:bg-red-100">×</button>
-                    )}
-                  </div>
-                  <input type="date" value={vencimientoCertificado} onChange={(e) => setVencimientoCertificado(e.target.value)} className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-blue-500" />
-                  <label className="cursor-pointer flex flex-col items-center justify-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-3 transition-all hover:bg-blue-50">
-                    <span className="text-[11px] font-bold text-slate-600">Seleccionar PDF</span>
-                    <input type="file" accept="application/pdf" onChange={(e) => setPdfCertificado(e.target.files?.[0] ?? null)} className="hidden" />
-                    {pdfCertificado && <span className="text-[10px] font-bold text-blue-700">{pdfCertificado.name}</span>}
-                  </label>
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                  <label className="block text-xs font-black text-slate-400 uppercase mb-2 ml-1">Certificado Mantención</label>
+                  <input type="file" accept="application/pdf" onChange={(e) => setPdfCertificado(e.target.files?.[0] ?? null)} className="w-full text-sm text-slate-600" />
                 </div>
-
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col gap-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-black text-slate-800 text-xs uppercase">SOAP</span>
-                    {pdfSoap && (
-                      <button type="button" onClick={() => setPdfSoap(null)} className="text-[10px] font-black px-2 py-1 rounded-full bg-red-50 text-red-600 border border-red-200 hover:bg-red-100">×</button>
-                    )}
-                  </div>
-                  <input type="date" value={vencimientoSoap} onChange={(e) => setVencimientoSoap(e.target.value)} className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-blue-500" />
-                  <label className="cursor-pointer flex flex-col items-center justify-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-3 transition-all hover:bg-blue-50">
-                    <span className="text-[11px] font-bold text-slate-600">Seleccionar PDF</span>
-                    <input type="file" accept="application/pdf" onChange={(e) => setPdfSoap(e.target.files?.[0] ?? null)} className="hidden" />
-                    {pdfSoap && <span className="text-[10px] font-bold text-blue-700">{pdfSoap.name}</span>}
-                  </label>
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                  <label className="block text-xs font-black text-slate-400 uppercase mb-2 ml-1">SOAP</label>
+                  <input type="file" accept="application/pdf" onChange={(e) => setPdfSoap(e.target.files?.[0] ?? null)} className="w-full text-sm text-slate-600" />
                 </div>
               </div>
 
               <div className="flex gap-4">
                 <button type="submit" disabled={procesando} className={`flex-1 font-bold py-4 rounded-xl transition-all shadow-md ${procesando ? 'bg-slate-400 text-white cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}> 
-                  {procesando ? 'Procesando...' : 'Registrar Vehículo y Generar QR'}
+                  {procesando ? 'Procesando...' : 'Guardar y Descargar PDF'}
                 </button>
               </div>
             </form>
           </div>
 
-          <aside className="lg:col-span-5 bg-white p-8 rounded-3xl shadow-2xl border border-slate-100 max-h-[800px] overflow-y-auto custom-scrollbar">
+          <aside className="lg:col-span-5 bg-white p-8 rounded-3xl shadow-2xl border border-slate-100">
             <div className="border-b border-slate-100 pb-4 mb-6">
               <h2 className="text-2xl font-black text-slate-800">Añadidos recientemente</h2>
             </div>
