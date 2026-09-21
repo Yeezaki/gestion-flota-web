@@ -102,7 +102,7 @@ export default function TabQRs({ busqueda, filtroTipoVehiculo }: TabQRsProps) {
     const elemento = document.getElementById(`tarjeta-pdf-${patente}`);
     if (elemento) {
       try {
-        await toPng(elemento, { cacheBust: true }); // primer render para calentar caché
+        await toPng(elemento, { cacheBust: true }); 
         const imgData = await toPng(elemento, { 
           quality: 1, 
           pixelRatio: 3, 

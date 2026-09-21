@@ -17,7 +17,7 @@ export default function AgendarHora() {
   const [cargando, setCargando] = useState(false);
   const [guardando, setGuardando] = useState(false);
   
-  // NUEVO ESTADO: Controla la pantalla final de éxito
+  // Controla la pantalla final de éxito
   const [reservaExitosa, setReservaExitosa] = useState(false);
 
   const [talleres, setTalleres] = useState<any[]>([]);

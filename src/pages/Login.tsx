@@ -50,8 +50,6 @@ export default function Login() {
             navigate('/admin');
           }
         } else {
-          // 3. CAMBIO APLICADO: Si no tiene documento en Firestore, pero pasó el Auth, 
-          // es la cuenta maestra (Admin). Lo dejamos pasar directo al panel de control.
           navigate('/admin');
         }
       } catch (firestoreErr) {
