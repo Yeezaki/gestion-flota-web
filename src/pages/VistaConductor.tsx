@@ -84,7 +84,6 @@ export default function VistaConductor() {
   const { id } = useParams();
   const storageKey = `checklist_cache_${id?.toUpperCase()}`;
 
-  // Inicializar estados intentando leer desde sessionStorage
   const [identificado, setIdentificado] = useState(() => {
     const cache = sessionStorage.getItem(storageKey);
     return cache ? JSON.parse(cache).identificado || false : false;
@@ -159,7 +158,6 @@ export default function VistaConductor() {
   const [firmando, setFirmando] = useState(false);
   const [tieneFirma, setTieneFirma] = useState(false);
 
-  // Sincronizar en sessionStorage ante cualquier cambio
   useEffect(() => {
     if (!id) return;
     const datosCache = {
@@ -363,7 +361,6 @@ export default function VistaConductor() {
       setKilometrajeActual(kmNuevo);
     }
 
-    // Verificar que todas las preguntas tengan respuesta
     for (const p of preguntasDinamicas) {
       if (!respuestasChecklist[p.id]) {
         alert(`Falta responder: ${p.texto}`);
@@ -452,7 +449,6 @@ export default function VistaConductor() {
         }
       }
 
-      // Limpiar memoria de sesión al terminar
       sessionStorage.removeItem(storageKey);
 
       if (tieneFallaCritica) setBloqueado(true);
@@ -502,6 +498,29 @@ export default function VistaConductor() {
             className="mt-auto w-full flex items-center justify-center gap-1.5 bg-slate-800/85 hover:bg-slate-900 text-white text-[11px] font-bold py-2 px-1 rounded-xl shadow transition-all active:scale-95"
           >
             Descargar
+          </button>
+        )}
+      </div>
+    );
+  };
+
+  const renderPautaInfo = (url: string, nombreArchivo: string) => {
+    return (
+      <div className="p-3 rounded-2xl border border-blue-200/80 bg-blue-50/70 backdrop-blur-sm flex flex-col justify-between items-center shadow-sm">
+        <div className="flex flex-col items-center w-full mb-2">
+          <span className="text-[10px] uppercase font-black text-blue-800 opacity-80 mb-1">Pauta de Mantención</span>
+          <span className="text-xs font-black text-blue-950">Manual / Preventivo</span>
+          <span className="text-[10px] font-bold text-blue-700 leading-tight mt-1 text-center">
+            {url ? 'Vigente y Disponible' : 'No disponible'}
+          </span>
+        </div>
+        {url && (
+          <button 
+            type="button"
+            onClick={() => forzarDescarga(url, nombreArchivo)} 
+            className="mt-auto w-full flex items-center justify-center gap-1.5 bg-blue-700 hover:bg-blue-800 text-white text-[11px] font-bold py-2 px-1 rounded-xl shadow transition-all active:scale-95"
+          >
+            Descargar Pauta
           </button>
         )}
       </div>
@@ -639,6 +658,9 @@ export default function VistaConductor() {
                 {renderDocInfo('Permiso Circ.', vehiculo.vencimientoCirculacion, vehiculo.urlCirculacion, `Circulacion_${id}.pdf`)}
                 {renderDocInfo('Certificado', vehiculo.vencimientoCertificado, vehiculo.urlCertificado, `Certificado_${id}.pdf`)}
                 {renderDocInfo('SOAP', vehiculo.vencimientoSoap, vehiculo.urlSoap, `SOAP_${id}.pdf`)}
+                <div className="col-span-2">
+                  {renderPautaInfo(vehiculo.urlPauta, `PautaMantencion_${id}.pdf`)}
+                </div>
               </div>
             ) : (
               <p className="text-center text-xs text-slate-500 mb-6">Documentos no disponibles en este momento.</p>
@@ -710,6 +732,9 @@ export default function VistaConductor() {
                 {renderDocInfo('Permiso Circ.', vehiculo.vencimientoCirculacion, vehiculo.urlCirculacion, `Circulacion_${id}.pdf`)}
                 {renderDocInfo('Certificado', vehiculo.vencimientoCertificado, vehiculo.urlCertificado, `Certificado_${id}.pdf`)}
                 {renderDocInfo('SOAP', vehiculo.vencimientoSoap, vehiculo.urlSoap, `SOAP_${id}.pdf`)}
+                <div className="col-span-2 mt-1">
+                  {renderPautaInfo(vehiculo.urlPauta, `PautaMantencion_${id}.pdf`)}
+                </div>
               </div>
             ) : (
               <p className="text-xs text-slate-500 italic text-center">Cargando documentos...</p>

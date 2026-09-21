@@ -27,6 +27,7 @@ export default function GeneradorQR() {
   const [pdfCirculacion, setPdfCirculacion] = useState<File | null>(null);
   const [pdfCertificado, setPdfCertificado] = useState<File | null>(null);
   const [pdfSoap, setPdfSoap] = useState<File | null>(null);
+  const [pdfPauta, setPdfPauta] = useState<File | null>(null);
 
   const [procesando, setProcesando] = useState(false);
   const [sesionVehiculos, setSesionVehiculos] = useState<any[]>([]);
@@ -50,6 +51,7 @@ export default function GeneradorQR() {
     setPdfCirculacion(null);
     setPdfCertificado(null);
     setPdfSoap(null);
+    setPdfPauta(null);
   };
 
   const guardarYDescargar = async (e: React.FormEvent) => {
@@ -65,13 +67,11 @@ export default function GeneradorQR() {
       const qQR = query(collection(db, 'qrs_guardados'), where('patente', '==', patenteMayuscula));
       const qrSnapshot = await getDocs(qQR);
 
-      const qVehiculo = query(collection(db, 'vehiculos'), where('patente', '==', patenteMayuscula));
-      const vehiculoSnapshot = await getDocs(qVehiculo);
-
       let urlRevision = '';
       let urlCirculacion = '';
       let urlCertificado = '';
       let urlSoap = '';
+      let urlPauta = '';
 
       if (pdfRevision) {
         const refRevision = ref(storage, `documentos/${patenteMayuscula}/revision.pdf`);
@@ -97,6 +97,12 @@ export default function GeneradorQR() {
         urlSoap = await getDownloadURL(refSoap);
       }
 
+      if (pdfPauta) {
+        const refPauta = ref(storage, `documentos/${patenteMayuscula}/pauta.pdf`);
+        await uploadBytes(refPauta, pdfPauta);
+        urlPauta = await getDownloadURL(refPauta);
+      }
+
       const vehiculoPayload = {
         patente: patenteMayuscula,
         tipo: tipoVehiculo,
@@ -114,6 +120,7 @@ export default function GeneradorQR() {
         urlCirculacion,
         urlCertificado,
         urlSoap,
+        urlPauta,
         fechaRegistro: serverTimestamp()
       };
 
@@ -137,10 +144,6 @@ export default function GeneradorQR() {
           creadoPorNombre: 'Administrador General',
           fechaRegistro: serverTimestamp()
         });
-      }
-
-      if (vehiculoSnapshot.empty) {
-        // el documento se crea junto con el vehículo, no se duplica con esta ruta
       }
 
       setSesionVehiculos(prev => [nuevoVehiculo, ...prev]);
@@ -338,6 +341,24 @@ export default function GeneradorQR() {
                     {pdfSoap && <span className="text-[10px] font-bold text-blue-700">{pdfSoap.name}</span>}
                   </label>
                 </div>
+              </div>
+
+              {/* Pauta de Mantención */}
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col gap-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <span className="font-black text-slate-800 text-xs uppercase">Pauta de Mantención</span>
+                    <span className="text-[11px] text-slate-400 block font-normal">Documento de inspección o preventivo (PDF)</span>
+                  </div>
+                  {pdfPauta && (
+                    <button type="button" onClick={() => setPdfPauta(null)} className="text-[10px] font-black px-2 py-1 rounded-full bg-red-50 text-red-600 border border-red-200 hover:bg-red-100">×</button>
+                  )}
+                </div>
+                <label className="cursor-pointer flex flex-col items-center justify-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-3 transition-all hover:bg-blue-50">
+                  <span className="text-[11px] font-bold text-slate-600">Seleccionar PDF de Pauta</span>
+                  <input type="file" accept="application/pdf" onChange={(e) => setPdfPauta(e.target.files?.[0] ?? null)} className="hidden" />
+                  {pdfPauta && <span className="text-[10px] font-bold text-blue-700">{pdfPauta.name}</span>}
+                </label>
               </div>
 
               <div className="flex gap-4">
