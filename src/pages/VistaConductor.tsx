@@ -68,14 +68,53 @@ const formatearRutChileno = (valor: string) => {
   return `${cuerpoFormateado}-${dv}`;
 };
 
+const base64ToFile = (base64String: string, filename: string): File => {
+  const arr = base64String.split(',');
+  const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
+  const bstr = atob(arr[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while (n--) {
+    u8arr[n] = bstr.charCodeAt(n);
+  }
+  return new File([u8arr], filename, { type: mime });
+};
+
 export default function VistaConductor() {
   const { id } = useParams();
-  
-  const [identificado, setIdentificado] = useState(false);
-  const [nombreConductor, setNombreConductor] = useState('');
-  const [rutConductor, setRutConductor] = useState('');
-  const [fotoLicencia, setFotoLicencia] = useState<File | null>(null);
-  const [fotoLicenciaPreview, setFotoLicenciaPreview] = useState<string | null>(null);
+  const storageKey = `checklist_cache_${id?.toUpperCase()}`;
+
+  // Inicializar estados intentando leer desde sessionStorage
+  const [identificado, setIdentificado] = useState(() => {
+    const cache = sessionStorage.getItem(storageKey);
+    return cache ? JSON.parse(cache).identificado || false : false;
+  });
+
+  const [nombreConductor, setNombreConductor] = useState(() => {
+    const cache = sessionStorage.getItem(storageKey);
+    return cache ? JSON.parse(cache).nombreConductor || '' : '';
+  });
+
+  const [rutConductor, setRutConductor] = useState(() => {
+    const cache = sessionStorage.getItem(storageKey);
+    return cache ? JSON.parse(cache).rutConductor || '' : '';
+  });
+
+  const [fotoLicenciaPreview, setFotoLicenciaPreview] = useState<string | null>(() => {
+    const cache = sessionStorage.getItem(storageKey);
+    return cache ? JSON.parse(cache).fotoLicenciaPreview || null : null;
+  });
+  const [fotoLicencia, setFotoLicencia] = useState<File | null>(() => {
+    const cache = sessionStorage.getItem(storageKey);
+    if (cache) {
+      const data = JSON.parse(cache);
+      if (data.fotoLicenciaPreview) {
+        return base64ToFile(data.fotoLicenciaPreview, `licencia_${id}.jpg`);
+      }
+    }
+    return null;
+  });
+
   const [errorIdentificacion, setErrorIdentificacion] = useState<string | null>(null);
 
   const [encuestaCompletada, setEncuestaCompletada] = useState(false);
@@ -85,10 +124,31 @@ export default function VistaConductor() {
   
   const [kilometrajeActual, setKilometrajeActual] = useState<number | null>(null);
   const [kilometrajeAnterior, setKilometrajeAnterior] = useState<number>(0);
-  const [kilometraje, setKilometraje] = useState('');
+  const [kilometraje, setKilometraje] = useState(() => {
+    const cache = sessionStorage.getItem(storageKey);
+    return cache ? JSON.parse(cache).kilometraje || '' : '';
+  });
   
-  const [fotoFile, setFotoFile] = useState<File | null>(null);
-  const [fotoPreview, setFotoPreview] = useState<string | null>(null);
+  const [fotoPreview, setFotoPreview] = useState<string | null>(() => {
+    const cache = sessionStorage.getItem(storageKey);
+    return cache ? JSON.parse(cache).fotoPreview || null : null;
+  });
+  const [fotoFile, setFotoFile] = useState<File | null>(() => {
+    const cache = sessionStorage.getItem(storageKey);
+    if (cache) {
+      const data = JSON.parse(cache);
+      if (data.fotoPreview) {
+        return base64ToFile(data.fotoPreview, `tablero_${id}.jpg`);
+      }
+    }
+    return null;
+  });
+
+  const [respuestasChecklist, setRespuestasChecklist] = useState<Record<string, string>>(() => {
+    const cache = sessionStorage.getItem(storageKey);
+    return cache ? JSON.parse(cache).respuestasChecklist || {} : {};
+  });
+
   const [subiendo, setSubiendo] = useState(false);
   
   const [vehiculo, setVehiculo] = useState<any>(null);
@@ -98,6 +158,21 @@ export default function VistaConductor() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [firmando, setFirmando] = useState(false);
   const [tieneFirma, setTieneFirma] = useState(false);
+
+  // Sincronizar en sessionStorage ante cualquier cambio
+  useEffect(() => {
+    if (!id) return;
+    const datosCache = {
+      identificado,
+      nombreConductor,
+      rutConductor,
+      fotoLicenciaPreview,
+      kilometraje,
+      fotoPreview,
+      respuestasChecklist
+    };
+    sessionStorage.setItem(storageKey, JSON.stringify(datosCache));
+  }, [identificado, nombreConductor, rutConductor, fotoLicenciaPreview, kilometraje, fotoPreview, respuestasChecklist, id, storageKey]);
 
   useEffect(() => {
     const cargarVehiculo = async () => {
@@ -114,7 +189,9 @@ export default function VistaConductor() {
 
           const kmRealAnterior = Number(vData.kilometrajeActual) || 0;
           setKilometrajeAnterior(kmRealAnterior);
-          setKilometraje(kmRealAnterior > 0 ? kmRealAnterior.toString() : '');
+          if (!kilometraje && kmRealAnterior > 0) {
+            setKilometraje(kmRealAnterior.toString());
+          }
         }
       } catch (error) {
         console.error(error);
@@ -156,7 +233,7 @@ export default function VistaConductor() {
       return;
     }
 
-    if (!fotoLicencia) {
+    if (!fotoLicenciaPreview && !fotoLicencia) {
       setErrorIdentificacion('Es obligatorio capturar o subir la foto de la Licencia de Conducir.');
       alert('Falta subir la foto de la Licencia de Conducir.');
       return;
@@ -214,7 +291,7 @@ export default function VistaConductor() {
     const esIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.userAgent.includes("Mac") && "ontouchend" in document);
 
     if (esIOS) {
-      window.open(url, '_blank');
+      window.open(url, '_blank', 'noopener,noreferrer');
       return;
     }
 
@@ -231,7 +308,7 @@ export default function VistaConductor() {
       window.URL.revokeObjectURL(urlBlob);
     } catch (error) {
       console.error("Error al descargar, abriendo en nueva pestaña:", error);
-      window.open(url, '_blank');
+      window.open(url, '_blank', 'noopener,noreferrer');
     }
   };
 
@@ -260,12 +337,14 @@ export default function VistaConductor() {
     }
   };
 
+  const manejarCambioPregunta = (idPregunta: string, valor: string) => {
+    setRespuestasChecklist(prev => ({ ...prev, [idPregunta]: valor }));
+  };
+
   const manejarEnvio = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const kilometrajeEscrito = formData.get('kilometraje') as string;
     
-    if (!fotoFile && !kilometrajeEscrito) {
+    if (!fotoFile && !kilometraje) {
       alert("Es obligatorio ingresar el kilometraje escrito o subir una foto del tablero.");
       return;
     }
@@ -275,8 +354,8 @@ export default function VistaConductor() {
       return;
     }
 
-    if (kilometrajeEscrito) {
-      const kmNuevo = Number(kilometrajeEscrito);
+    if (kilometraje) {
+      const kmNuevo = Number(kilometraje);
       if (kmNuevo < kilometrajeAnterior) {
         alert(`Error: El kilometraje ingresado (${kmNuevo} km) no puede ser menor al último registro exacto (${kilometrajeAnterior} km).`);
         return;
@@ -284,14 +363,18 @@ export default function VistaConductor() {
       setKilometrajeActual(kmNuevo);
     }
 
+    // Verificar que todas las preguntas tengan respuesta
+    for (const p of preguntasDinamicas) {
+      if (!respuestasChecklist[p.id]) {
+        alert(`Falta responder: ${p.texto}`);
+        return;
+      }
+    }
+
     setSubiendo(true);
     let tieneFallaCritica = false;
-    const respuestas: Record<string, string> = {};
-
-    preguntasDinamicas.forEach(p => {
-      const respuesta = formData.get(p.id) as string;
-      respuestas[p.id] = respuesta;
-      if (respuesta === 'no') tieneFallaCritica = true;
+    Object.values(respuestasChecklist).forEach(val => {
+      if (val === 'no') tieneFallaCritica = true;
     });
 
     try {
@@ -307,10 +390,11 @@ export default function VistaConductor() {
 
       let licenciaUrl = null;
       let licenciaPath = null;
-      if (fotoLicencia) {
-        licenciaPath = `licencias/${id}-${Date.now()}-${fotoLicencia.name}`;
+      const archivoLicencia = fotoLicencia || (fotoLicenciaPreview ? base64ToFile(fotoLicenciaPreview, `licencia_${id}.jpg`) : null);
+      if (archivoLicencia) {
+        licenciaPath = `licencias/${id}-${Date.now()}-${archivoLicencia.name}`;
         const licenciaRef = ref(storage, licenciaPath);
-        await uploadBytes(licenciaRef, fotoLicencia);
+        await uploadBytes(licenciaRef, archivoLicencia);
         licenciaUrl = await getDownloadURL(licenciaRef);
       }
 
@@ -330,7 +414,7 @@ export default function VistaConductor() {
         tipoVehiculo: tipoActual,
         conductorNombre: nombreConductor,
         conductorRut: rutConductor,
-        kilometraje: kilometrajeEscrito || "No ingresado",
+        kilometraje: kilometraje || "No ingresado",
         fotoUrl: fotoUrl,
         fotoPath: fotoPath,
         licenciaUrl: licenciaUrl,
@@ -338,13 +422,13 @@ export default function VistaConductor() {
         firmaUrl: firmaUrl,
         firmaPath: firmaPath,
         fallaCritica: tieneFallaCritica,
-        respuestas: respuestas,
+        respuestas: respuestasChecklist,
         fecha: serverTimestamp()
       });
 
-      if (kilometrajeEscrito && vehiculoIdDoc) {
+      if (kilometraje && vehiculoIdDoc) {
         await updateDoc(doc(db, 'vehiculos', vehiculoIdDoc), {
-          kilometrajeActual: kilometrajeEscrito
+          kilometrajeActual: kilometraje
         });
       }
 
@@ -367,6 +451,9 @@ export default function VistaConductor() {
           await deleteDoc(item.ref);
         }
       }
+
+      // Limpiar memoria de sesión al terminar
+      sessionStorage.removeItem(storageKey);
 
       if (tieneFallaCritica) setBloqueado(true);
       else setEncuestaCompletada(true);
@@ -412,7 +499,7 @@ export default function VistaConductor() {
           <button 
             type="button"
             onClick={() => forzarDescarga(url, nombreArchivo)} 
-            className="mt-auto w-full flex items-center justify-center gap-1.5 bg-slate-800/85 hover:bg-slate-900 text-white text-[11px] font-bold py-2 px-1 rounded-xl shadow transition-all"
+            className="mt-auto w-full flex items-center justify-center gap-1.5 bg-slate-800/85 hover:bg-slate-900 text-white text-[11px] font-bold py-2 px-1 rounded-xl shadow transition-all active:scale-95"
           >
             Descargar
           </button>
@@ -464,9 +551,12 @@ export default function VistaConductor() {
               <label className="block text-xs font-black text-slate-600 uppercase mb-1 ml-1">Foto Licencia de Conducir</label>
               <label className="block w-full cursor-pointer">
                 <input type="file" accept="image/*" capture="environment" onChange={capturarLicencia} className="hidden" />
-                <div className={`border-2 border-dashed bg-white/60 rounded-2xl p-4 text-center hover:bg-white/80 transition-all shadow-sm backdrop-blur-sm ${!fotoLicencia && errorIdentificacion ? 'border-red-400 bg-red-50/40' : 'border-slate-300'}`}>
+                <div className={`border-2 border-dashed bg-white/60 rounded-2xl p-4 text-center hover:bg-white/80 transition-all shadow-sm backdrop-blur-sm ${!fotoLicenciaPreview && errorIdentificacion ? 'border-red-400 bg-red-50/40' : 'border-slate-300'}`}>
                   {fotoLicenciaPreview ? (
-                    <img src={fotoLicenciaPreview} className="mx-auto h-20 rounded-lg shadow-sm" alt="Vista previa licencia" />
+                    <div className="flex flex-col items-center">
+                      <img src={fotoLicenciaPreview} className="mx-auto h-20 rounded-lg shadow-sm mb-1 object-cover" alt="Vista previa licencia" />
+                      <span className="text-[11px] font-bold text-blue-600">Presiona para cambiar foto</span>
+                    </div>
                   ) : (
                     <span className="text-slate-600 text-sm font-bold flex items-center justify-center gap-2 text-blue-600">
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg> 
@@ -497,7 +587,7 @@ export default function VistaConductor() {
           <p className="text-slate-600 text-base leading-relaxed mb-8 font-medium">
             Tu reporte de checklist diario ha sido completado y guardado con éxito. ¡Que tengas una excelente jornada y un viaje muy seguro!
           </p>
-          <button onClick={() => window.location.reload()} className="text-sm font-bold text-slate-600 hover:text-slate-900 transition-colors">
+          <button onClick={() => { sessionStorage.removeItem(storageKey); window.location.reload(); }} className="text-sm font-bold text-slate-600 hover:text-slate-900 transition-colors">
             Volver a escanear QR
           </button>
         </div>
@@ -554,7 +644,7 @@ export default function VistaConductor() {
               <p className="text-center text-xs text-slate-500 mb-6">Documentos no disponibles en este momento.</p>
             )}
 
-            <button onClick={() => setJornadaFinalizada(true)} className="mt-2 w-full bg-slate-800/90 hover:bg-slate-900 text-white font-black py-4 rounded-xl shadow-md transition-colors active:scale-[0.98]">
+            <button onClick={() => { sessionStorage.removeItem(storageKey); setJornadaFinalizada(true); }} className="mt-2 w-full bg-slate-800/90 hover:bg-slate-900 text-white font-black py-4 rounded-xl shadow-md transition-colors active:scale-[0.98]">
               Finalizar Jornada
             </button>
           </div>
@@ -650,7 +740,17 @@ export default function VistaConductor() {
               <label className="block w-full cursor-pointer">
                 <input type="file" accept="image/*" capture="environment" onChange={capturarFotoTablero} className="hidden" />
                 <div className="border-2 border-dashed border-slate-300 bg-white/60 rounded-xl p-4 text-center hover:bg-white/80 transition-all shadow-sm">
-                  {fotoPreview ? <img src={fotoPreview} className="mx-auto h-24 rounded-lg shadow-sm" alt="Vista previa" /> : <span className="text-slate-600 text-sm font-bold flex items-center justify-center gap-2 text-blue-600"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg> Tomar foto con la cámara</span>}
+                  {fotoPreview ? (
+                    <div className="flex flex-col items-center">
+                      <img src={fotoPreview} className="mx-auto h-24 rounded-lg shadow-sm mb-1 object-cover" alt="Vista previa" />
+                      <span className="text-[11px] font-bold text-blue-600">Presiona para cambiar foto</span>
+                    </div>
+                  ) : (
+                    <span className="text-slate-600 text-sm font-bold flex items-center justify-center gap-2 text-blue-600">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg> 
+                      Tomar foto con la cámara
+                    </span>
+                  )}
                 </div>
               </label>
             </div>
@@ -662,14 +762,28 @@ export default function VistaConductor() {
               <div key={p.id} className="space-y-2 mb-5">
                 <p className="text-slate-800 font-medium text-sm leading-snug">{p.texto}</p>
                 <div className="flex gap-4">
-                  <label className="flex-1">
-                    <input type="radio" name={p.id} value="si" required className="hidden peer" />
-                    <div className="text-center py-2.5 rounded-xl border-2 border-slate-300 bg-white/60 peer-checked:border-blue-600 peer-checked:bg-blue-50/80 cursor-pointer font-bold text-slate-500 peer-checked:text-blue-600 transition-all shadow-sm">SI</div>
-                  </label>
-                  <label className="flex-1">
-                    <input type="radio" name={p.id} value="no" required className="hidden peer" />
-                    <div className="text-center py-2.5 rounded-xl border-2 border-slate-300 bg-white/60 peer-checked:border-red-600 peer-checked:bg-red-50/80 cursor-pointer font-bold text-slate-500 peer-checked:text-red-600 transition-all shadow-sm">NO</div>
-                  </label>
+                  <button
+                    type="button"
+                    onClick={() => manejarCambioPregunta(p.id, 'si')}
+                    className={`flex-1 py-2.5 rounded-xl border-2 font-bold text-sm transition-all shadow-sm ${
+                      respuestasChecklist[p.id] === 'si'
+                        ? 'border-blue-600 bg-blue-50/90 text-blue-600'
+                        : 'border-slate-300 bg-white/60 text-slate-500 hover:bg-white/80'
+                    }`}
+                  >
+                    SI
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => manejarCambioPregunta(p.id, 'no')}
+                    className={`flex-1 py-2.5 rounded-xl border-2 font-bold text-sm transition-all shadow-sm ${
+                      respuestasChecklist[p.id] === 'no'
+                        ? 'border-red-600 bg-red-50/90 text-red-600'
+                        : 'border-slate-300 bg-white/60 text-slate-500 hover:bg-white/80'
+                    }`}
+                  >
+                    NO
+                  </button>
                 </div>
               </div>
             ))}
