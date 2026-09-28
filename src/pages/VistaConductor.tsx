@@ -76,7 +76,14 @@ export default function VistaConductor() {
 
   const [faseSeguimientoCompletada, setFaseSeguimientoCompletada] = useState(false);
   const [faseColoresCompletada, setFaseColoresCompletada] = useState(false);
+  const [mostrarPantallaPuntajePVT, setMostrarPantallaPuntajePVT] = useState(false);
   const [datosTests, setDatosTests] = useState<any[]>([]);
+  const [puntajeGlobalPVT, setPuntajeGlobalPVT] = useState<number>(100);
+
+  const [ubicacionGPS, setUbicacionGPS] = useState<any>(() => {
+    const cache = sessionStorage.getItem(storageKey);
+    return cache ? JSON.parse(cache).ubicacionGPS || null : null;
+  });
 
   const [nombreConductor, setNombreConductor] = useState(() => {
     const cache = sessionStorage.getItem(storageKey);
@@ -106,6 +113,7 @@ export default function VistaConductor() {
 
   const [encuestaCompletada, setEncuestaCompletada] = useState(false);
   const [bloqueado, setBloqueado] = useState(false);
+  const [motivoBloqueo, setMotivoBloqueo] = useState<'pvt' | 'checklist' | null>(null);
   const [mostrarResumen, setMostrarResumen] = useState(false);
   const [jornadaFinalizada, setJornadaFinalizada] = useState(false);
 
@@ -154,10 +162,11 @@ export default function VistaConductor() {
       fotoLicenciaPreview,
       kilometraje,
       fotoPreview,
-      respuestasChecklist
+      respuestasChecklist,
+      ubicacionGPS
     };
     sessionStorage.setItem(storageKey, JSON.stringify(datosCache));
-  }, [identificado, nombreConductor, rutConductor, fotoLicenciaPreview, kilometraje, fotoPreview, respuestasChecklist, patenteValida, storageKey]);
+  }, [identificado, nombreConductor, rutConductor, fotoLicenciaPreview, kilometraje, fotoPreview, respuestasChecklist, ubicacionGPS, patenteValida, storageKey]);
 
   useEffect(() => {
     const cargarVehiculo = async () => {
@@ -194,6 +203,19 @@ export default function VistaConductor() {
       return () => clearTimeout(timer);
     }
   }, [encuestaCompletada, bloqueado]);
+
+  const registrarEnHistorial = async (accion: string, detalles: string) => {
+    try {
+      await addDoc(collection(db, 'historial_acciones'), {
+        usuario: nombreConductor ? `${nombreConductor} (${rutConductor})` : 'Conductor',
+        accion,
+        detalles,
+        fecha: serverTimestamp()
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const forzarDescarga = async (url: string, nombreArchivo: string) => {
     const esIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.userAgent.includes("Mac") && "ontouchend" in document);
@@ -330,10 +352,25 @@ export default function VistaConductor() {
         firmaUrl,
         firmaPath,
         fallaCritica: tieneFallaCritica,
+        bloqueoPorTestCognitivo: false,
         respuestas: respuestasChecklist,
         testsCognitivos: datosTests,
+        puntajePVT: puntajeGlobalPVT,
+        ubicacion: ubicacionGPS || null,
         fecha: serverTimestamp()
       });
+
+      if (tieneFallaCritica) {
+        await registrarEnHistorial(
+          'BLOQUEO_CHECKLIST',
+          `Vehículo ${patenteValida} bloqueado por fallas críticas en checklist. PVT aprobado (${puntajeGlobalPVT}%). Conductor: ${nombreConductor}`
+        );
+      } else {
+        await registrarEnHistorial(
+          'CHECKLIST_COMPLETADO',
+          `Vehículo ${patenteValida} operativo. PVT: ${puntajeGlobalPVT}%. Conductor: ${nombreConductor}`
+        );
+      }
 
       if (kilometraje && vehiculoIdDoc) {
         await updateDoc(doc(db, 'vehiculos', vehiculoIdDoc), {
@@ -363,8 +400,12 @@ export default function VistaConductor() {
 
       sessionStorage.removeItem(storageKey);
 
-      if (tieneFallaCritica) setBloqueado(true);
-      else setEncuestaCompletada(true);
+      if (tieneFallaCritica) {
+        setMotivoBloqueo('checklist');
+        setBloqueado(true);
+      } else {
+        setEncuestaCompletada(true);
+      }
 
     } catch (error) {
       console.error(error);
@@ -374,10 +415,30 @@ export default function VistaConductor() {
     }
   };
 
+  const calcularNotaGlobal = (tests: any[]) => {
+    let puntos = 100;
+    tests.forEach((t) => {
+      if (!t.aprobado) puntos -= 40;
+      if (t.erroresComision) puntos -= (t.erroresComision * 10);
+      if (t.erroresOmision) puntos -= (t.erroresOmision * 10);
+      if (t.promedioMs && t.promedioMs > 500) {
+        const penalizacionMs = Math.min(25, Math.round((t.promedioMs - 500) / 10));
+        puntos -= penalizacionMs;
+      }
+    });
+    return Math.max(0, Math.min(100, puntos));
+  };
+
   const procesarResultadoSeguimiento = async (resultado: any) => {
-    setDatosTests((prev) => [...prev, resultado]);
+    const nuevosTests = [...datosTests, resultado];
+    setDatosTests(nuevosTests);
+
     if (!resultado.aprobado) {
+      const notaCalculada = calcularNotaGlobal(nuevosTests);
+      setPuntajeGlobalPVT(notaCalculada);
+      setMotivoBloqueo('pvt');
       setBloqueado(true);
+
       try {
         await addDoc(collection(db, 'reportes'), {
           vehiculoId: patenteValida,
@@ -388,8 +449,16 @@ export default function VistaConductor() {
           fallaCritica: true,
           bloqueoPorTestCognitivo: true,
           testFallido: resultado,
+          testsCognitivos: nuevosTests,
+          puntajePVT: notaCalculada,
+          ubicacion: ubicacionGPS || null,
           fecha: serverTimestamp()
         });
+
+        await registrarEnHistorial(
+          'BLOQUEO_TEST_PVT',
+          `Vehículo ${patenteValida} bloqueado por reprobación en Seguimiento MOT (${notaCalculada}%). Conductor: ${nombreConductor}`
+        );
       } catch (err) {
         console.error(err);
       }
@@ -399,9 +468,15 @@ export default function VistaConductor() {
   };
 
   const procesarResultadoColores = async (resultado: any) => {
-    setDatosTests((prev) => [...prev, resultado]);
+    const nuevosTests = [...datosTests, resultado];
+    setDatosTests(nuevosTests);
+    const notaCalculada = calcularNotaGlobal(nuevosTests);
+    setPuntajeGlobalPVT(notaCalculada);
+
     if (!resultado.aprobado) {
+      setMotivoBloqueo('pvt');
       setBloqueado(true);
+
       try {
         await addDoc(collection(db, 'reportes'), {
           vehiculoId: patenteValida,
@@ -412,13 +487,22 @@ export default function VistaConductor() {
           fallaCritica: true,
           bloqueoPorTestCognitivo: true,
           testFallido: resultado,
+          testsCognitivos: nuevosTests,
+          puntajePVT: notaCalculada,
+          ubicacion: ubicacionGPS || null,
           fecha: serverTimestamp()
         });
+
+        await registrarEnHistorial(
+          'BLOQUEO_TEST_PVT',
+          `Vehículo ${patenteValida} bloqueado por reprobación en Reacción Colores (${notaCalculada}%). Conductor: ${nombreConductor}`
+        );
       } catch (err) {
         console.error(err);
       }
     } else {
       setFaseColoresCompletada(true);
+      setMostrarPantallaPuntajePVT(true);
     }
   };
 
@@ -435,6 +519,8 @@ export default function VistaConductor() {
           fotoLicenciaPreview={fotoLicenciaPreview}
           setFotoLicenciaPreview={setFotoLicenciaPreview}
           setFotoLicencia={setFotoLicencia}
+          ubicacionGPS={ubicacionGPS}
+          setUbicacionGPS={setUbicacionGPS}
           onContinuar={() => setIdentificado(true)}
         />
       )}
@@ -449,20 +535,65 @@ export default function VistaConductor() {
         <TestCognitivo onFinalizado={procesarResultadoColores} />
       )}
 
-      {/* 4. Bloqueo */}
+      {/* 4. Tarjeta de Puntaje / Resultado de las Pruebas Psicomotoras */}
+      {identificado && faseColoresCompletada && mostrarPantallaPuntajePVT && !bloqueado && (
+        <div className="bg-white/70 backdrop-blur-md p-8 rounded-3xl shadow-2xl max-w-md w-full border border-white/60 animate-fade-in relative z-10 text-center">
+          <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <span className="bg-green-100 text-green-800 text-xs font-black uppercase px-3 py-1 rounded-full shadow-sm">
+            Pruebas Aprobadas
+          </span>
+          <h2 className="text-2xl font-black text-slate-800 mt-2">Aptitud Psicomotora</h2>
+          
+          <div className="bg-white/80 rounded-2xl p-4 my-5 border border-slate-200 shadow-sm">
+            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Calificación de Vigilia</div>
+            <div className="text-4xl font-black text-blue-600 my-1">{puntajeGlobalPVT}%</div>
+            <p className="text-xs text-slate-600 font-medium">Reflejos y atención dentro de los rangos de seguridad.</p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setMostrarPantallaPuntajePVT(false)}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl shadow-lg transition-all"
+          >
+            Continuar al Checklist
+          </button>
+        </div>
+      )}
+
+      {/* 5. Bloqueo */}
       {bloqueado && !mostrarResumen && (
         <div className="bg-white/60 backdrop-blur-md p-8 rounded-2xl shadow-xl max-w-md border-2 border-red-500/80 animate-fade-in w-full relative z-10 border border-white/50 text-center">
           <h1 className="text-2xl font-black text-red-700">VEHICULO BLOQUEADO</h1>
-          <p className="mt-4 text-slate-700 font-medium">
-            Falla crítica detectada o prueba psicomotora no superada. El vehículo no puede circular. Avise a la administración inmediatamente.
-          </p>
+          {motivoBloqueo === 'pvt' ? (
+            <div>
+              <p className="mt-4 text-slate-700 font-medium">
+                Prueba psicomotora no superada (Puntaje: {puntajeGlobalPVT}%). Se detectaron indicios de fatiga o reflejos alterados.
+              </p>
+              <div className="mt-2 text-xs font-bold text-red-600 bg-red-50 p-2 rounded-xl border border-red-200">
+                Bloqueo exclusivo por Test de Reacción/Seguimiento. El checklist quedó deshabilitado.
+              </div>
+            </div>
+          ) : (
+            <div>
+              <p className="mt-4 text-slate-700 font-medium">
+                Falla crítica detectada en el checklist. El vehículo no puede circular.
+              </p>
+              <div className="mt-2 text-xs font-bold text-slate-600 bg-slate-50 p-2 rounded-xl border border-slate-200">
+                Prueba psicomotora previa: Aprobada ({puntajeGlobalPVT}%).
+              </div>
+            </div>
+          )}
           <div className="mt-6 flex justify-center">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-700"></div>
           </div>
         </div>
       )}
 
-      {/* 5. Enviando reporte */}
+      {/* 6. Enviando reporte */}
       {encuestaCompletada && !mostrarResumen && (
         <div className="bg-white/60 backdrop-blur-md p-8 rounded-2xl shadow-xl max-w-md border-2 border-green-500/80 animate-fade-in w-full relative z-10 border border-white/50 text-center">
           <h1 className="text-2xl font-black text-green-700">Reporte Enviado</h1>
@@ -473,8 +604,8 @@ export default function VistaConductor() {
         </div>
       )}
 
-      {/* 6. Formulario de Checklist */}
-      {identificado && faseSeguimientoCompletada && faseColoresCompletada && !encuestaCompletada && !bloqueado && (
+      {/* 7. Formulario de Checklist */}
+      {identificado && faseColoresCompletada && !mostrarPantallaPuntajePVT && !encuestaCompletada && !bloqueado && (
         <FormChecklist
           idPatente={patenteValida}
           nombreConductor={nombreConductor}
@@ -498,7 +629,7 @@ export default function VistaConductor() {
         />
       )}
 
-      {/* 7. Resumen de Jornada */}
+      {/* 8. Resumen de Jornada */}
       {mostrarResumen && !jornadaFinalizada && (
         <ResumenConductor
           idPatente={patenteValida}
@@ -516,7 +647,7 @@ export default function VistaConductor() {
         />
       )}
 
-      {/* 8. Despedida */}
+      {/* 9. Despedida */}
       {jornadaFinalizada && (
         <div className="bg-white/60 backdrop-blur-md p-10 rounded-3xl shadow-2xl max-w-md w-full border-t-8 border-green-500 animate-fade-in relative z-10 border border-white/50 text-center">
           <div className="mx-auto w-16 h-16 bg-green-100/90 text-green-700 rounded-full flex items-center justify-center mb-6 shadow-inner">

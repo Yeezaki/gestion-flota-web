@@ -1,5 +1,12 @@
 import { useState } from 'react';
 
+type UbicacionGPS = {
+  latitud: number;
+  longitud: number;
+  precisionMetros: number;
+  enlaceMapa: string;
+};
+
 type IdentificacionConductorProps = {
   patente: string;
   nombreConductor: string;
@@ -9,6 +16,8 @@ type IdentificacionConductorProps = {
   fotoLicenciaPreview: string | null;
   setFotoLicenciaPreview: (val: string | null) => void;
   setFotoLicencia: (val: File | null) => void;
+  ubicacionGPS: UbicacionGPS | null;
+  setUbicacionGPS: (val: UbicacionGPS | null) => void;
   onContinuar: () => void;
 };
 
@@ -43,9 +52,12 @@ export default function IdentificacionConductor({
   fotoLicenciaPreview,
   setFotoLicenciaPreview,
   setFotoLicencia,
+  ubicacionGPS,
+  setUbicacionGPS,
   onContinuar
 }: IdentificacionConductorProps) {
   const [error, setError] = useState<string | null>(null);
+  const [obteniendoGPS, setObteniendoGPS] = useState(false);
 
   const manejarCambioRut = (e: React.ChangeEvent<HTMLInputElement>) => {
     const formateado = formatearRutChileno(e.target.value);
@@ -64,6 +76,45 @@ export default function IdentificacionConductor({
     }
   };
 
+  const capturarUbicacion = () => {
+    if (!navigator.geolocation) {
+      setError('Tu navegador o dispositivo no soporta geolocalización GPS.');
+      return;
+    }
+
+    setObteniendoGPS(true);
+    setError(null);
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        const precision = Math.round(pos.coords.accuracy);
+
+        setUbicacionGPS({
+          latitud: lat,
+          longitud: lng,
+          precisionMetros: precision,
+          enlaceMapa: `https://www.google.com/maps?q=${lat},${lng}`
+        });
+        setObteniendoGPS(false);
+      },
+      (err) => {
+        setObteniendoGPS(false);
+        if (err.code === err.PERMISSION_DENIED) {
+          setError('Permiso de GPS denegado. Habilita los permisos de ubicación en tu navegador para continuar.');
+        } else {
+          setError('No fue posible obtener la señal de GPS. Intenta en un lugar más despejado.');
+        }
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 12000,
+        maximumAge: 0
+      }
+    );
+  };
+
   const validarFormulario = (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -74,12 +125,17 @@ export default function IdentificacionConductor({
 
     const rutLimpio = rutConductor.replace(/[^0-9kK]/g, '');
     if (rutLimpio.length < 8) {
-      setError('El RUT ingresado no es valido (ej: 12.345.678-9).');
+      setError('El RUT ingresado no es válido (ej: 12.345.678-9).');
       return;
     }
 
     if (!fotoLicenciaPreview) {
       setError('Falta subir la foto de la Licencia de Conducir.');
+      return;
+    }
+
+    if (!ubicacionGPS) {
+      setError('Es obligatorio capturar tu ubicación GPS actual antes de continuar.');
       return;
     }
 
@@ -91,12 +147,12 @@ export default function IdentificacionConductor({
     <div className="bg-white/60 backdrop-blur-md p-8 rounded-3xl shadow-2xl max-w-md w-full border border-white/50 animate-fade-in relative z-10">
       <div className="text-center mb-6">
         <span className="bg-blue-100/90 text-blue-700 text-xs font-black uppercase px-3 py-1 rounded-full shadow-sm">Control de Flota</span>
-        <h1 className="text-2xl font-black text-slate-800 mt-3">Identificacion</h1>
+        <h1 className="text-2xl font-black text-slate-800 mt-3">Identificación</h1>
         <p className="text-sm text-slate-600 mt-1 font-mono font-bold tracking-wider">Patente: {patente.toUpperCase()}</p>
       </div>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-100/90 border border-red-300 text-red-700 text-xs font-bold rounded-xl text-center">
+        <div className="mb-4 p-3 bg-red-100/90 border border-red-300 text-red-700 text-xs font-bold rounded-xl text-center leading-relaxed">
           {error}
         </div>
       )}
@@ -108,7 +164,7 @@ export default function IdentificacionConductor({
             type="text" 
             value={nombreConductor} 
             onChange={(e) => { setNombreConductor(e.target.value); if (error) setError(null); }} 
-            placeholder="Ej: Juan Perez" 
+            placeholder="Ej: Juan Pérez" 
             className="w-full p-4 bg-white/70 border border-white/80 rounded-2xl font-bold text-slate-800 focus:border-blue-500 focus:bg-white/90 focus:outline-none transition-all shadow-sm" 
           />
         </div>
@@ -145,6 +201,34 @@ export default function IdentificacionConductor({
             </div>
           </label>
         </div>
+
+        {/* Captura de Ubicación GPS */}
+        <div>
+          <label className="block text-xs font-black text-slate-600 uppercase mb-1 ml-1">Ubicación de Salida / Faena</label>
+          <button
+            type="button"
+            onClick={capturarUbicacion}
+            disabled={obteniendoGPS}
+            className={`w-full p-4 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all border shadow-sm ${
+              ubicacionGPS 
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-300' 
+                : 'bg-white/70 text-slate-700 border-slate-300 hover:bg-white'
+            }`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 ${ubicacionGPS ? 'text-emerald-600' : 'text-blue-600'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            {obteniendoGPS ? (
+              <span>Obteniendo señal GPS...</span>
+            ) : ubicacionGPS ? (
+              <span>Ubicación Guardada (±{ubicacionGPS.precisionMetros}m)</span>
+            ) : (
+              <span>Capturar Ubicación Actual</span>
+            )}
+          </button>
+        </div>
+
         <button type="submit" className="w-full bg-blue-600/90 hover:bg-blue-700 text-white font-black py-4 rounded-2xl shadow-lg transition-all mt-4 active:scale-[0.98]">
           Continuar
         </button>
