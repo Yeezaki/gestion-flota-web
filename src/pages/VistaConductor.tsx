@@ -6,7 +6,6 @@ import { db, storage } from '../lib/firebase';
 
 import IdentificacionConductor from '../components/conductor/IdentificacionConductor';
 import TestSeguimiento from '../components/conductor/TestSeguimiento';
-import TestTrazoContinuo from '../components/conductor/TestTrazoContinuo';
 import TestCognitivo from '../components/conductor/TestCognitivo';
 import FormChecklist from '../components/conductor/FormChecklist';
 import ResumenConductor from '../components/conductor/ResumenConductor';
@@ -75,7 +74,6 @@ export default function VistaConductor() {
     return cache ? JSON.parse(cache).identificado || false : false;
   });
 
-  const [tipoJuegoSeguimiento, setTipoJuegoSeguimiento] = useState<'mot' | 'trazo'>('mot');
   const [faseSeguimientoCompletada, setFaseSeguimientoCompletada] = useState(false);
   const [faseColoresCompletada, setFaseColoresCompletada] = useState(false);
   const [datosTests, setDatosTests] = useState<any[]>([]);
@@ -437,20 +435,13 @@ export default function VistaConductor() {
           fotoLicenciaPreview={fotoLicenciaPreview}
           setFotoLicenciaPreview={setFotoLicenciaPreview}
           setFotoLicencia={setFotoLicencia}
-          onContinuar={() => {
-            setTipoJuegoSeguimiento(Math.random() > 0.5 ? 'mot' : 'trazo');
-            setIdentificado(true);
-          }}
+          onContinuar={() => setIdentificado(true)}
         />
       )}
 
-      {/* 2. Primer Test: Seguimiento o Trazo */}
+      {/* 2. Primer Test: Seguimiento de Objetos Múltiples (MOT) */}
       {identificado && !faseSeguimientoCompletada && !bloqueado && (
-        tipoJuegoSeguimiento === 'mot' ? (
-          <TestSeguimiento onFinalizado={procesarResultadoSeguimiento} />
-        ) : (
-          <TestTrazoContinuo onFinalizado={procesarResultadoSeguimiento} />
-        )
+        <TestSeguimiento onFinalizado={procesarResultadoSeguimiento} />
       )}
 
       {/* 3. Segundo Test: Reacción por Colores (Go/No-Go) */}
