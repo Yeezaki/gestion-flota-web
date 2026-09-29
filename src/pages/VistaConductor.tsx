@@ -204,6 +204,21 @@ export default function VistaConductor() {
     }
   }, [encuestaCompletada, bloqueado]);
 
+  const reiniciarSesionLimpia = () => {
+    sessionStorage.removeItem(storageKey);
+    setIdentificado(false);
+    setFaseSeguimientoCompletada(false);
+    setFaseColoresCompletada(false);
+    setMostrarPantallaPuntajePVT(false);
+    setDatosTests([]);
+    setBloqueado(false);
+    setMotivoBloqueo(null);
+    setEncuestaCompletada(false);
+    setMostrarResumen(false);
+    setRespuestasChecklist({});
+    window.location.reload();
+  };
+
   const registrarEnHistorial = async (accion: string, detalles: string) => {
     try {
       await addDoc(collection(db, 'historial_acciones'), {
@@ -521,7 +536,14 @@ export default function VistaConductor() {
           setFotoLicencia={setFotoLicencia}
           ubicacionGPS={ubicacionGPS}
           setUbicacionGPS={setUbicacionGPS}
-          onContinuar={() => setIdentificado(true)}
+          onContinuar={() => {
+            setFaseSeguimientoCompletada(false);
+            setFaseColoresCompletada(false);
+            setMostrarPantallaPuntajePVT(false);
+            setBloqueado(false);
+            setMotivoBloqueo(null);
+            setIdentificado(true);
+          }}
         />
       )}
 
@@ -587,9 +609,14 @@ export default function VistaConductor() {
               </div>
             </div>
           )}
-          <div className="mt-6 flex justify-center">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-700"></div>
-          </div>
+          
+          <button
+            type="button"
+            onClick={reiniciarSesionLimpia}
+            className="mt-6 px-6 py-2.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-xl transition-all"
+          >
+            Reintentar Identificación
+          </button>
         </div>
       )}
 
