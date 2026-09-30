@@ -58,6 +58,21 @@ export default function TestMemoriaSecuencia({ onFinalizado }: TestMemoriaSecuen
     reproducirSecuenciaVisual(secuenciasPorRonda[0]);
   };
 
+  const siguientePaso = () => {
+    setFase('memorizar');
+    setRondaActual((prevRonda) => {
+      if (prevRonda >= totalRondas) {
+        finalizarEvaluacion();
+        return prevRonda;
+      }
+      const siguiente = prevRonda + 1;
+      setTimeout(() => {
+        reproducirSecuenciaVisual(secuenciasPorRonda[siguiente - 1]);
+      }, 900);
+      return siguiente;
+    });
+  };
+
   const manejarPulsacionBoton = (idBoton: number) => {
     if (fase !== 'reproducir') return;
 
@@ -72,7 +87,7 @@ export default function TestMemoriaSecuencia({ onFinalizado }: TestMemoriaSecuen
 
     if (nuevaSecuencia[indiceActual] !== secuenciaEsperada[indiceActual]) {
       erroresRef.current += 1;
-      siguientePaso(false);
+      siguientePaso();
       return;
     }
 
@@ -80,23 +95,8 @@ export default function TestMemoriaSecuencia({ onFinalizado }: TestMemoriaSecuen
       const tiempoUsado = Date.now() - tiempoInicioReproduccion.current;
       tiemposRespuesta.current.push(tiempoUsado);
       aciertosRef.current += 1;
-      siguientePaso(true);
+      siguientePaso();
     }
-  };
-
-  const siguientePaso = (acerto: boolean) => {
-    setFase('memorizar');
-    setRondaActual((prevRonda) => {
-      if (prevRonda >= totalRondas) {
-        finalizarEvaluacion();
-        return prevRonda;
-      }
-      const siguiente = prevRonda + 1;
-      setTimeout(() => {
-        reproducirSecuenciaVisual(secuenciasPorRonda[siguiente - 1]);
-      }, 900);
-      return siguiente;
-    });
   };
 
   const finalizarEvaluacion = () => {
