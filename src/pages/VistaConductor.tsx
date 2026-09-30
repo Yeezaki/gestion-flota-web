@@ -201,33 +201,18 @@ export default function VistaConductor() {
   }, [patenteValida]);
 
   useEffect(() => {
-    if (encuestaCompletada || bloqueado) {
+    if (encuestaCompletada) {
       const timer = setTimeout(() => {
         setMostrarResumen(true);
-      }, 3000);
+      }, 2500);
       return () => clearTimeout(timer);
     }
-  }, [encuestaCompletada, bloqueado]);
+  }, [encuestaCompletada]);
 
   const seleccionarParejaAleatoria = (): [TipoTestPVT, TipoTestPVT] => {
     const catalogo: TipoTestPVT[] = ['reaccion', 'seguimiento', 'trazo', 'memoria'];
     const barajado = [...catalogo].sort(() => Math.random() - 0.5);
     return [barajado[0], barajado[1]];
-  };
-
-  const reiniciarSesionLimpia = () => {
-    sessionStorage.removeItem(storageKey);
-    setIdentificado(false);
-    setFasePVTCompletada(false);
-    setTestActualIndice(0);
-    setMostrarPantallaPuntajePVT(false);
-    setDatosTests([]);
-    setBloqueado(false);
-    setMotivoBloqueo(null);
-    setEncuestaCompletada(false);
-    setMostrarResumen(false);
-    setRespuestasChecklist({});
-    window.location.reload();
   };
 
   const registrarEnHistorial = async (accion: string, detalles: string) => {
@@ -447,7 +432,7 @@ export default function VistaConductor() {
       if (!t.aprobado) puntos -= 40;
       if (t.erroresComision) puntos -= (t.erroresComision * 10);
       if (t.erroresOmision) puntos -= (t.erroresOmision * 10);
-      if (t.promedioMs && t.promedioMs > 500 && t.tipoTest.includes('Reaccion')) {
+      if (t.promedioMs && t.promedioMs > 500 && t.tipoTest && t.tipoTest.includes('Reaccion')) {
         const penalizacionMs = Math.min(25, Math.round((t.promedioMs - 500) / 10));
         puntos -= penalizacionMs;
       }
@@ -580,37 +565,49 @@ export default function VistaConductor() {
         </div>
       )}
 
-      {/* 4. Bloqueo */}
+      {/* 4. Pantalla de Bloqueo */}
       {bloqueado && !mostrarResumen && (
-        <div className="bg-white/60 backdrop-blur-md p-8 rounded-2xl shadow-xl max-w-md border-2 border-red-500/80 animate-fade-in w-full relative z-10 border border-white/50 text-center">
-          <h1 className="text-2xl font-black text-red-700">VEHICULO BLOQUEADO</h1>
-          {motivoBloqueo === 'pvt' ? (
-            <div>
-              <p className="mt-4 text-slate-700 font-medium">
-                Prueba psicomotora no superada (Puntaje: {puntajeGlobalPVT}%). Se detectaron indicios de fatiga o reflejos alterados.
+        <div className="bg-white/70 backdrop-blur-md p-8 rounded-3xl shadow-2xl max-w-md border-2 border-red-500/80 animate-fade-in w-full relative z-10 text-center">
+          <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+
+          <h1 className="text-2xl font-black text-red-700">VEHÍCULO BLOQUEADO</h1>
+
+          {motivoBloqueo === 'checklist' ? (
+            <div className="mt-4 space-y-4">
+              <p className="text-slate-700 text-sm font-medium">
+                Se detectaron una o más <strong>fallas críticas en el checklist de inspección</strong>. Por normativa de seguridad, este vehículo no puede iniciar ruta.
               </p>
-              <div className="mt-2 text-xs font-bold text-red-600 bg-red-50 p-2 rounded-xl border border-red-200">
-                Bloqueo preventivo por fatiga. El checklist quedó deshabilitado.
+              <div className="bg-green-50 border border-green-200 text-green-800 p-3 rounded-2xl text-xs font-bold flex items-center justify-center gap-2">
+                <span>Evaluación psicomotora: Aprobada ({puntajeGlobalPVT}%)</span>
               </div>
+              <p className="text-xs text-slate-500 font-medium">
+                Comunícate inmediatamente con el supervisor o encargado de flota para reportar las fallas.
+              </p>
+              <button
+                type="button"
+                onClick={() => setMostrarResumen(true)}
+                className="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-3.5 rounded-2xl text-xs shadow-md transition-all active:scale-[0.98]"
+              >
+                Ver Resumen y Documentación
+              </button>
             </div>
           ) : (
-            <div>
-              <p className="mt-4 text-slate-700 font-medium">
-                Falla crítica detectada en el checklist. El vehículo no puede circular.
+            <div className="mt-4 space-y-4">
+              <p className="text-slate-700 text-sm font-medium">
+                Evaluación psicomotora no superada (Puntaje: {puntajeGlobalPVT}%). Se detectaron indicios de fatiga, reflejos lentos o falta de atención.
               </p>
-              <div className="mt-2 text-xs font-bold text-slate-600 bg-slate-50 p-2 rounded-xl border border-slate-200">
-                Pruebas psicomotoras previas: Aprobadas ({puntajeGlobalPVT}%).
+              <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-2xl text-xs font-bold">
+                Bloqueo preventivo de seguridad. El checklist quedó inhabilitado.
               </div>
+              <p className="text-xs text-slate-500 font-medium">
+                Avisa al supervisor a cargo para reasignación o pausa reglamentaria.
+              </p>
             </div>
           )}
-          
-          <button
-            type="button"
-            onClick={reiniciarSesionLimpia}
-            className="mt-6 px-6 py-2.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-xl transition-all"
-          >
-            Reintentar Identificación
-          </button>
         </div>
       )}
 
