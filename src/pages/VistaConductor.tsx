@@ -5,10 +5,14 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage
 import { db, storage } from '../lib/firebase';
 
 import IdentificacionConductor from '../components/conductor/IdentificacionConductor';
-import TestSeguimiento from '../components/conductor/TestSeguimiento';
 import TestCognitivo from '../components/conductor/TestCognitivo';
+import TestSeguimiento from '../components/conductor/TestSeguimiento';
+import TestTrazoContinuo from '../components/conductor/TestTrazoContinuo';
+import TestMemoriaSecuencia from '../components/conductor/TestMemoriaSecuencia';
 import FormChecklist from '../components/conductor/FormChecklist';
 import ResumenConductor from '../components/conductor/ResumenConductor';
+
+type TipoTestPVT = 'reaccion' | 'seguimiento' | 'trazo' | 'memoria';
 
 const preguntasPorTipo = {
   'Tracto camión': [
@@ -74,8 +78,9 @@ export default function VistaConductor() {
     return cache ? JSON.parse(cache).identificado || false : false;
   });
 
-  const [faseSeguimientoCompletada, setFaseSeguimientoCompletada] = useState(false);
-  const [faseColoresCompletada, setFaseColoresCompletada] = useState(false);
+  const [parejaTests, setParejaTests] = useState<[TipoTestPVT, TipoTestPVT]>(['seguimiento', 'reaccion']);
+  const [testActualIndice, setTestActualIndice] = useState<number>(0);
+  const [fasePVTCompletada, setFasePVTCompletada] = useState(false);
   const [mostrarPantallaPuntajePVT, setMostrarPantallaPuntajePVT] = useState(false);
   const [datosTests, setDatosTests] = useState<any[]>([]);
   const [puntajeGlobalPVT, setPuntajeGlobalPVT] = useState<number>(100);
@@ -204,11 +209,17 @@ export default function VistaConductor() {
     }
   }, [encuestaCompletada, bloqueado]);
 
+  const seleccionarParejaAleatoria = (): [TipoTestPVT, TipoTestPVT] => {
+    const catalogo: TipoTestPVT[] = ['reaccion', 'seguimiento', 'trazo', 'memoria'];
+    const barajado = [...catalogo].sort(() => Math.random() - 0.5);
+    return [barajado[0], barajado[1]];
+  };
+
   const reiniciarSesionLimpia = () => {
     sessionStorage.removeItem(storageKey);
     setIdentificado(false);
-    setFaseSeguimientoCompletada(false);
-    setFaseColoresCompletada(false);
+    setFasePVTCompletada(false);
+    setTestActualIndice(0);
     setMostrarPantallaPuntajePVT(false);
     setDatosTests([]);
     setBloqueado(false);
@@ -436,7 +447,7 @@ export default function VistaConductor() {
       if (!t.aprobado) puntos -= 40;
       if (t.erroresComision) puntos -= (t.erroresComision * 10);
       if (t.erroresOmision) puntos -= (t.erroresOmision * 10);
-      if (t.promedioMs && t.promedioMs > 500) {
+      if (t.promedioMs && t.promedioMs > 500 && t.tipoTest.includes('Reaccion')) {
         const penalizacionMs = Math.min(25, Math.round((t.promedioMs - 500) / 10));
         puntos -= penalizacionMs;
       }
@@ -444,45 +455,7 @@ export default function VistaConductor() {
     return Math.max(0, Math.min(100, puntos));
   };
 
-  const procesarResultadoSeguimiento = async (resultado: any) => {
-    const nuevosTests = [...datosTests, resultado];
-    setDatosTests(nuevosTests);
-
-    if (!resultado.aprobado) {
-      const notaCalculada = calcularNotaGlobal(nuevosTests);
-      setPuntajeGlobalPVT(notaCalculada);
-      setMotivoBloqueo('pvt');
-      setBloqueado(true);
-
-      try {
-        await addDoc(collection(db, 'reportes'), {
-          vehiculoId: patenteValida,
-          tipoVehiculo: tipoActual,
-          conductorNombre: nombreConductor,
-          conductorRut: rutConductor,
-          kilometraje: kilometraje || "No ingresado",
-          fallaCritica: true,
-          bloqueoPorTestCognitivo: true,
-          testFallido: resultado,
-          testsCognitivos: nuevosTests,
-          puntajePVT: notaCalculada,
-          ubicacion: ubicacionGPS || null,
-          fecha: serverTimestamp()
-        });
-
-        await registrarEnHistorial(
-          'BLOQUEO_TEST_PVT',
-          `Vehículo ${patenteValida} bloqueado por reprobación en Seguimiento MOT (${notaCalculada}%). Conductor: ${nombreConductor}`
-        );
-      } catch (err) {
-        console.error(err);
-      }
-    } else {
-      setFaseSeguimientoCompletada(true);
-    }
-  };
-
-  const procesarResultadoColores = async (resultado: any) => {
+  const procesarResultadoTestGenerico = async (resultado: any) => {
     const nuevosTests = [...datosTests, resultado];
     setDatosTests(nuevosTests);
     const notaCalculada = calcularNotaGlobal(nuevosTests);
@@ -510,14 +483,33 @@ export default function VistaConductor() {
 
         await registrarEnHistorial(
           'BLOQUEO_TEST_PVT',
-          `Vehículo ${patenteValida} bloqueado por reprobación en Reacción Colores (${notaCalculada}%). Conductor: ${nombreConductor}`
+          `Vehículo ${patenteValida} bloqueado por reprobación en ${resultado.tipoTest} (${notaCalculada}%). Conductor: ${nombreConductor}`
         );
       } catch (err) {
         console.error(err);
       }
     } else {
-      setFaseColoresCompletada(true);
-      setMostrarPantallaPuntajePVT(true);
+      if (testActualIndice === 0) {
+        setTestActualIndice(1);
+      } else {
+        setFasePVTCompletada(true);
+        setMostrarPantallaPuntajePVT(true);
+      }
+    }
+  };
+
+  const renderComponenteTest = (tipo: TipoTestPVT) => {
+    switch (tipo) {
+      case 'reaccion':
+        return <TestCognitivo onFinalizado={procesarResultadoTestGenerico} />;
+      case 'seguimiento':
+        return <TestSeguimiento onFinalizado={procesarResultadoTestGenerico} />;
+      case 'trazo':
+        return <TestTrazoContinuo onFinalizado={procesarResultadoTestGenerico} />;
+      case 'memoria':
+        return <TestMemoriaSecuencia onFinalizado={procesarResultadoTestGenerico} />;
+      default:
+        return <TestCognitivo onFinalizado={procesarResultadoTestGenerico} />;
     }
   };
 
@@ -537,8 +529,10 @@ export default function VistaConductor() {
           ubicacionGPS={ubicacionGPS}
           setUbicacionGPS={setUbicacionGPS}
           onContinuar={() => {
-            setFaseSeguimientoCompletada(false);
-            setFaseColoresCompletada(false);
+            const parejaElegida = seleccionarParejaAleatoria();
+            setParejaTests(parejaElegida);
+            setTestActualIndice(0);
+            setFasePVTCompletada(false);
             setMostrarPantallaPuntajePVT(false);
             setBloqueado(false);
             setMotivoBloqueo(null);
@@ -547,18 +541,18 @@ export default function VistaConductor() {
         />
       )}
 
-      {/* 2. Primer Test: Seguimiento de Objetos Múltiples (MOT) */}
-      {identificado && !faseSeguimientoCompletada && !bloqueado && (
-        <TestSeguimiento onFinalizado={procesarResultadoSeguimiento} />
+      {/* 2. Pruebas Psicomotoras Aleatorias (Test 1 y Test 2) */}
+      {identificado && !fasePVTCompletada && !bloqueado && (
+        <div className="w-full flex flex-col items-center">
+          <div className="mb-3 text-[11px] font-black uppercase tracking-wider text-slate-700 bg-white/70 backdrop-blur-sm px-4 py-1.5 rounded-full shadow-sm">
+            Batería Psicomotora: Prueba {testActualIndice + 1} de 2
+          </div>
+          {renderComponenteTest(parejaTests[testActualIndice])}
+        </div>
       )}
 
-      {/* 3. Segundo Test: Reacción por Colores (Go/No-Go) */}
-      {identificado && faseSeguimientoCompletada && !faseColoresCompletada && !bloqueado && (
-        <TestCognitivo onFinalizado={procesarResultadoColores} />
-      )}
-
-      {/* 4. Tarjeta de Puntaje / Resultado de las Pruebas Psicomotoras */}
-      {identificado && faseColoresCompletada && mostrarPantallaPuntajePVT && !bloqueado && (
+      {/* 3. Tarjeta de Puntaje / Resultado de las Pruebas Psicomotoras */}
+      {identificado && fasePVTCompletada && mostrarPantallaPuntajePVT && !bloqueado && (
         <div className="bg-white/70 backdrop-blur-md p-8 rounded-3xl shadow-2xl max-w-md w-full border border-white/60 animate-fade-in relative z-10 text-center">
           <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -586,7 +580,7 @@ export default function VistaConductor() {
         </div>
       )}
 
-      {/* 5. Bloqueo */}
+      {/* 4. Bloqueo */}
       {bloqueado && !mostrarResumen && (
         <div className="bg-white/60 backdrop-blur-md p-8 rounded-2xl shadow-xl max-w-md border-2 border-red-500/80 animate-fade-in w-full relative z-10 border border-white/50 text-center">
           <h1 className="text-2xl font-black text-red-700">VEHICULO BLOQUEADO</h1>
@@ -596,7 +590,7 @@ export default function VistaConductor() {
                 Prueba psicomotora no superada (Puntaje: {puntajeGlobalPVT}%). Se detectaron indicios de fatiga o reflejos alterados.
               </p>
               <div className="mt-2 text-xs font-bold text-red-600 bg-red-50 p-2 rounded-xl border border-red-200">
-                Bloqueo exclusivo por Test de Reacción/Seguimiento. El checklist quedó deshabilitado.
+                Bloqueo preventivo por fatiga. El checklist quedó deshabilitado.
               </div>
             </div>
           ) : (
@@ -605,7 +599,7 @@ export default function VistaConductor() {
                 Falla crítica detectada en el checklist. El vehículo no puede circular.
               </p>
               <div className="mt-2 text-xs font-bold text-slate-600 bg-slate-50 p-2 rounded-xl border border-slate-200">
-                Prueba psicomotora previa: Aprobada ({puntajeGlobalPVT}%).
+                Pruebas psicomotoras previas: Aprobadas ({puntajeGlobalPVT}%).
               </div>
             </div>
           )}
@@ -620,7 +614,7 @@ export default function VistaConductor() {
         </div>
       )}
 
-      {/* 6. Enviando reporte */}
+      {/* 5. Enviando reporte */}
       {encuestaCompletada && !mostrarResumen && (
         <div className="bg-white/60 backdrop-blur-md p-8 rounded-2xl shadow-xl max-w-md border-2 border-green-500/80 animate-fade-in w-full relative z-10 border border-white/50 text-center">
           <h1 className="text-2xl font-black text-green-700">Reporte Enviado</h1>
@@ -631,8 +625,8 @@ export default function VistaConductor() {
         </div>
       )}
 
-      {/* 7. Formulario de Checklist */}
-      {identificado && faseColoresCompletada && !mostrarPantallaPuntajePVT && !encuestaCompletada && !bloqueado && (
+      {/* 6. Formulario de Checklist */}
+      {identificado && fasePVTCompletada && !mostrarPantallaPuntajePVT && !encuestaCompletada && !bloqueado && (
         <FormChecklist
           idPatente={patenteValida}
           nombreConductor={nombreConductor}
@@ -656,7 +650,7 @@ export default function VistaConductor() {
         />
       )}
 
-      {/* 8. Resumen de Jornada */}
+      {/* 7. Resumen de Jornada */}
       {mostrarResumen && !jornadaFinalizada && (
         <ResumenConductor
           idPatente={patenteValida}
@@ -674,7 +668,7 @@ export default function VistaConductor() {
         />
       )}
 
-      {/* 9. Despedida */}
+      {/* 8. Despedida */}
       {jornadaFinalizada && (
         <div className="bg-white/60 backdrop-blur-md p-10 rounded-3xl shadow-2xl max-w-md w-full border-t-8 border-green-500 animate-fade-in relative z-10 border border-white/50 text-center">
           <div className="mx-auto w-16 h-16 bg-green-100/90 text-green-700 rounded-full flex items-center justify-center mb-6 shadow-inner">

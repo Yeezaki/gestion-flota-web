@@ -34,6 +34,7 @@ export default function TestSeguimiento({ onFinalizado }: TestSeguimientoProps) 
   const pelotasRef = useRef<Pelota[]>([]);
   const animacionRef = useRef<number | null>(null);
   const tiempoInicioRonda = useRef<number>(0);
+  const ultimoFrame = useRef<number>(0);
   const tiemposRespuesta = useRef<number[]>([]);
   const faseRef = useRef<'instrucciones' | 'memorizar' | 'movimiento' | 'seleccion' | 'resultado'>('instrucciones');
 
@@ -52,7 +53,7 @@ export default function TestSeguimiento({ onFinalizado }: TestSeguimientoProps) 
       const radio = 18;
       const x = Math.random() * (ancho - radio * 4) + radio * 2;
       const y = Math.random() * (alto - radio * 4) + radio * 2;
-      const velocidad = 1.9;
+      const velocidad = 1.3;
       const angulo = Math.random() * Math.PI * 2;
 
       nuevasPelotas.push({
@@ -99,25 +100,40 @@ export default function TestSeguimiento({ onFinalizado }: TestSeguimientoProps) 
     });
   };
 
-  const actualizarPosiciones = () => {
+  const actualizarPosiciones = (factorDelta: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     pelotasRef.current.forEach((p) => {
-      p.x += p.vx;
-      p.y += p.vy;
+      p.x += p.vx * factorDelta;
+      p.y += p.vy * factorDelta;
 
-      if (p.x - p.radio <= 0 || p.x + p.radio >= canvas.width) {
+      if (p.x - p.radio <= 0) {
+        p.x = p.radio;
+        p.vx *= -1;
+      } else if (p.x + p.radio >= canvas.width) {
+        p.x = canvas.width - p.radio;
         p.vx *= -1;
       }
-      if (p.y - p.radio <= 0 || p.y + p.radio >= canvas.height) {
+
+      if (p.y - p.radio <= 0) {
+        p.y = p.radio;
+        p.vy *= -1;
+      } else if (p.y + p.radio >= canvas.height) {
+        p.y = canvas.height - p.radio;
         p.vy *= -1;
       }
     });
   };
 
   const bucleAnimacion = () => {
-    actualizarPosiciones();
+    const ahora = Date.now();
+    const deltaMs = ahora - ultimoFrame.current;
+    ultimoFrame.current = ahora;
+
+    const factorDelta = Math.min(Math.max(deltaMs / 16.67, 0.5), 2.5);
+
+    actualizarPosiciones(factorDelta);
     dibujar('movimiento');
     animacionRef.current = requestAnimationFrame(bucleAnimacion);
   };
@@ -134,6 +150,7 @@ export default function TestSeguimiento({ onFinalizado }: TestSeguimientoProps) 
     setTimeout(() => {
       setFase('movimiento');
       faseRef.current = 'movimiento';
+      ultimoFrame.current = Date.now();
       bucleAnimacion();
 
       setTimeout(() => {
@@ -146,21 +163,19 @@ export default function TestSeguimiento({ onFinalizado }: TestSeguimientoProps) 
     }, 2200);
   };
 
-  const manejarClickCanvas = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+  const manejarPulsacion = (clientX: number, clientY: number) => {
     if (fase !== 'seleccion') return;
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const rect = canvas.getBoundingClientRect();
-    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
     const x = clientX - rect.left;
     const y = clientY - rect.top;
 
     const pelotaTocada = pelotasRef.current.find((p) => {
       const dx = p.x - x;
       const dy = p.y - y;
-      return Math.sqrt(dx * dx + dy * dy) <= p.radio;
+      return Math.sqrt(dx * dx + dy * dy) <= p.radio * 1.3;
     });
 
     if (pelotaTocada && !pelotaTocada.seleccionada) {
@@ -196,7 +211,7 @@ export default function TestSeguimiento({ onFinalizado }: TestSeguimientoProps) 
               promedioMs: promedio,
               erroresComision: errores + (2 - objetivosAcertados),
               erroresOmision: 0,
-              tipoTest: 'Seguimiento Multiple (MOT)'
+              tipoTest: 'Seguimiento Múltiple (MOT)'
             });
           }, 1000);
         }
@@ -211,10 +226,10 @@ export default function TestSeguimiento({ onFinalizado }: TestSeguimientoProps) 
   }, []);
 
   return (
-    <div className="bg-white/60 backdrop-blur-md p-8 rounded-3xl shadow-2xl max-w-md w-full border border-white/50 animate-fade-in relative z-10 text-center select-none">
+    <div className="bg-white/60 backdrop-blur-md p-6 md:p-8 rounded-3xl shadow-2xl max-w-md w-full border border-white/50 animate-fade-in relative z-10 text-center select-none">
       <div className="mb-4">
         <span className="bg-sky-100 text-sky-800 text-xs font-black uppercase px-3 py-1 rounded-full shadow-sm">
-          Atencion Dividida y Seguimiento
+          Atención Dividida y Seguimiento
         </span>
         <h2 className="text-xl font-black text-slate-800 mt-2">Seguimiento de Objetos</h2>
       </div>
@@ -222,8 +237,8 @@ export default function TestSeguimiento({ onFinalizado }: TestSeguimientoProps) 
       {fase === 'instrucciones' && (
         <div className="space-y-4 text-left">
           <p className="text-xs text-slate-600 font-medium leading-relaxed bg-white/60 p-4 rounded-2xl border border-slate-200">
-            1. Memoriza las <strong>2 bolitas azules</strong> que se iluminaran al inicio.<br />
-            2. Siguelas visualmente mientras se mueven por la pantalla.<br />
+            1. Memoriza las <strong>2 bolitas azules</strong> que se iluminarán al inicio.<br />
+            2. Síguelas visualmente mientras se mueven por la pantalla.<br />
             3. Al detenerse, toca las 2 bolitas que memorizaste.
           </p>
           <button
@@ -241,7 +256,7 @@ export default function TestSeguimiento({ onFinalizado }: TestSeguimientoProps) 
           <div className="flex justify-between items-center text-xs font-bold text-slate-500 mb-3 px-1">
             <span>Ronda {rondaActual} de {totalRondas}</span>
             <span className="text-blue-600 uppercase font-black">
-              {fase === 'memorizar' ? 'Memoriza los 2 azules' : fase === 'movimiento' ? 'Siguelos con la vista' : 'Toca los 2 que eran azules'}
+              {fase === 'memorizar' ? 'Memoriza los 2 azules' : fase === 'movimiento' ? 'Síguelos con la vista' : 'Toca los 2 que eran azules'}
             </span>
           </div>
 
@@ -250,14 +265,18 @@ export default function TestSeguimiento({ onFinalizado }: TestSeguimientoProps) 
               ref={canvasRef}
               width={320}
               height={240}
-              onClick={manejarClickCanvas}
-              onTouchStart={manejarClickCanvas}
+              onClick={(e) => manejarPulsacion(e.clientX, e.clientY)}
+              onTouchStart={(e) => {
+                if (e.touches.length > 0) {
+                  manejarPulsacion(e.touches[0].clientX, e.touches[0].clientY);
+                }
+              }}
               className="cursor-pointer"
             />
           </div>
 
           <p className="text-[11px] text-slate-500 mt-3 font-medium">
-            {fase === 'seleccion' ? 'Selecciona los 2 objetivos.' : 'Manten la mirada fija en los objetivos.'}
+            {fase === 'seleccion' ? 'Selecciona los 2 objetivos.' : 'Mantén la mirada fija en los objetivos.'}
           </p>
         </div>
       )}
@@ -265,7 +284,7 @@ export default function TestSeguimiento({ onFinalizado }: TestSeguimientoProps) 
       {fase === 'resultado' && (
         <div className="py-8 space-y-3">
           <div className="w-12 h-12 rounded-full border-4 border-slate-300 border-t-blue-600 animate-spin mx-auto"></div>
-          <p className="text-sm font-black text-slate-700">Analizando precision visual y atencion...</p>
+          <p className="text-sm font-black text-slate-700">Analizando precisión visual y atención...</p>
         </div>
       )}
     </div>
