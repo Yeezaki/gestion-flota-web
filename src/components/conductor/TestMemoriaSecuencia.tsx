@@ -126,7 +126,7 @@ export default function TestMemoriaSecuencia({ onFinalizado }: TestMemoriaSecuen
   ];
 
   return (
-    <div className="bg-white/60 backdrop-blur-md p-6 md:p-8 rounded-3xl shadow-2xl max-w-md w-full border border-white/50 animate-fade-in relative z-10 text-center select-none">
+    <div className="bg-white/60 backdrop-blur-md p-6 md:p-8 rounded-3xl shadow-2xl max-w-md w-full border border-white/50 animate-fade-in relative z-10 text-center select-none touch-none">
       <div className="mb-4">
         <span className="bg-purple-100 text-purple-800 text-xs font-black uppercase px-3 py-1 rounded-full shadow-sm">
           Memoria de Trabajo y Alerta
@@ -143,7 +143,7 @@ export default function TestMemoriaSecuencia({ onFinalizado }: TestMemoriaSecuen
           </p>
           <button
             type="button"
-            onClick={iniciarPrueba}
+            onPointerDown={iniciarPrueba}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl shadow-lg transition-all"
           >
             Comenzar Prueba
@@ -169,8 +169,8 @@ export default function TestMemoriaSecuencia({ onFinalizado }: TestMemoriaSecuen
                   key={btn.id}
                   type="button"
                   disabled={fase === 'memorizar'}
-                  onClick={() => manejarPulsacionBoton(btn.id)}
-                  className={`h-28 rounded-2xl transition-all duration-150 relative ${btn.color} ${
+                  onPointerDown={(e) => { e.preventDefault(); manejarPulsacionBoton(btn.id); }}
+                  className={`h-28 rounded-2xl transition-all duration-150 relative touch-none ${btn.color} ${
                     estaActivo
                       ? 'border-4 border-slate-950 scale-105 shadow-2xl shadow-black/50 brightness-110 z-10'
                       : 'border-2 border-slate-300/70 opacity-75 hover:opacity-90'

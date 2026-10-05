@@ -163,14 +163,15 @@ export default function TestSeguimiento({ onFinalizado }: TestSeguimientoProps) 
     }, 2200);
   };
 
-  const manejarPulsacion = (clientX: number, clientY: number) => {
+  const manejarPulsacion = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
     if (fase !== 'seleccion') return;
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const rect = canvas.getBoundingClientRect();
-    const x = clientX - rect.left;
-    const y = clientY - rect.top;
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
 
     const pelotaTocada = pelotasRef.current.find((p) => {
       const dx = p.x - x;
@@ -226,7 +227,7 @@ export default function TestSeguimiento({ onFinalizado }: TestSeguimientoProps) 
   }, []);
 
   return (
-    <div className="bg-white/60 backdrop-blur-md p-6 md:p-8 rounded-3xl shadow-2xl max-w-md w-full border border-white/50 animate-fade-in relative z-10 text-center select-none">
+    <div className="bg-white/60 backdrop-blur-md p-6 md:p-8 rounded-3xl shadow-2xl max-w-md w-full border border-white/50 animate-fade-in relative z-10 text-center select-none touch-none">
       <div className="mb-4">
         <span className="bg-sky-100 text-sky-800 text-xs font-black uppercase px-3 py-1 rounded-full shadow-sm">
           Atención Dividida y Seguimiento
@@ -243,7 +244,7 @@ export default function TestSeguimiento({ onFinalizado }: TestSeguimientoProps) 
           </p>
           <button
             type="button"
-            onClick={iniciarRonda}
+            onPointerDown={iniciarRonda}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl shadow-lg transition-all"
           >
             Comenzar Prueba
@@ -260,17 +261,12 @@ export default function TestSeguimiento({ onFinalizado }: TestSeguimientoProps) 
             </span>
           </div>
 
-          <div className="border-2 border-slate-300 rounded-3xl bg-white/80 overflow-hidden shadow-inner flex justify-center">
+          <div className="border-2 border-slate-300 rounded-3xl bg-white/80 overflow-hidden shadow-inner flex justify-center touch-none">
             <canvas
               ref={canvasRef}
               width={320}
               height={240}
-              onClick={(e) => manejarPulsacion(e.clientX, e.clientY)}
-              onTouchStart={(e) => {
-                if (e.touches.length > 0) {
-                  manejarPulsacion(e.touches[0].clientX, e.touches[0].clientY);
-                }
-              }}
+              onPointerDown={manejarPulsacion}
               className="cursor-pointer"
             />
           </div>

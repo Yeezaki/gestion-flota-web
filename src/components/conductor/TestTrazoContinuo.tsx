@@ -209,6 +209,7 @@ export default function TestTrazoContinuo({ onFinalizado }: TestTrazoContinuoPro
   };
 
   const manejarTouch = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    e.preventDefault(); // Crítico en trazo para evitar que el navegador scrollee la página
     const touchList = Array.from(e.touches).map(t => ({ clientX: t.clientX, clientY: t.clientY }));
     verificarContacto(touchList);
   };
@@ -231,7 +232,7 @@ export default function TestTrazoContinuo({ onFinalizado }: TestTrazoContinuoPro
   }, []);
 
   return (
-    <div className="bg-white/60 backdrop-blur-md p-6 md:p-8 rounded-3xl shadow-2xl max-w-md w-full border border-white/50 animate-fade-in relative z-10 text-center select-none">
+    <div className="bg-white/60 backdrop-blur-md p-6 md:p-8 rounded-3xl shadow-2xl max-w-md w-full border border-white/50 animate-fade-in relative z-10 text-center select-none touch-none">
       <div className="mb-4">
         <span className="bg-indigo-100 text-indigo-800 text-xs font-black uppercase px-3 py-1 rounded-full shadow-sm">
           Coordinación Visomotora
@@ -248,7 +249,7 @@ export default function TestTrazoContinuo({ onFinalizado }: TestTrazoContinuoPro
           </p>
           <button
             type="button"
-            onClick={iniciarPrueba}
+            onPointerDown={iniciarPrueba}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl shadow-lg transition-all"
           >
             Comenzar Prueba

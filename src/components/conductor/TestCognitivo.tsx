@@ -73,7 +73,8 @@ export default function TestCognitivo({ onFinalizado }: TestCognitivoProps) {
     }, tiempoEsperaAleatorio);
   };
 
-  const manejarPulsacion = () => {
+  const manejarPulsacion = (e: React.PointerEvent) => {
+    e.preventDefault(); // Prevenir comportamientos por defecto
     if (fase === 'espera') {
       limpiarTemporizadores();
       setErroresComision((prev) => prev + 1);
@@ -128,7 +129,7 @@ export default function TestCognitivo({ onFinalizado }: TestCognitivoProps) {
   };
 
   return (
-    <div className="bg-white/60 backdrop-blur-md p-8 rounded-3xl shadow-2xl max-w-md w-full border border-white/50 animate-fade-in relative z-10 text-center select-none">
+    <div className="bg-white/60 backdrop-blur-md p-8 rounded-3xl shadow-2xl max-w-md w-full border border-white/50 animate-fade-in relative z-10 text-center select-none touch-none">
       <div className="mb-4">
         <span className="bg-amber-100 text-amber-800 text-xs font-black uppercase px-3 py-1 rounded-full shadow-sm">
           Evaluacion de Reflejos
@@ -145,7 +146,7 @@ export default function TestCognitivo({ onFinalizado }: TestCognitivoProps) {
           </p>
           <button
             type="button"
-            onClick={iniciarTest}
+            onPointerDown={iniciarTest}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl shadow-lg transition-all"
           >
             Comenzar Prueba
@@ -160,8 +161,8 @@ export default function TestCognitivo({ onFinalizado }: TestCognitivoProps) {
           </div>
 
           <div
-            onClick={manejarPulsacion}
-            className="w-full h-64 bg-white/70 border-2 border-slate-300 rounded-3xl flex flex-col items-center justify-center cursor-pointer transition-all active:scale-[0.99] shadow-inner relative overflow-hidden"
+            onPointerDown={manejarPulsacion}
+            className="w-full h-64 bg-white/70 border-2 border-slate-300 rounded-3xl flex flex-col items-center justify-center cursor-pointer transition-all active:scale-[0.99] shadow-inner relative overflow-hidden touch-none"
           >
             {fase === 'espera' && (
               <div className="flex flex-col items-center gap-2">
