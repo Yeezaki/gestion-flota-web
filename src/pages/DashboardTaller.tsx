@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, getDocs, getDoc, doc, updateDoc, addDoc, serverTimestamp, where } from 'firebase/firestore';
+import { collection, query, getDocs, getDoc, doc, updateDoc, addDoc, serverTimestamp, where, runTransaction } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { db, auth } from '../lib/firebase';
 
@@ -132,9 +132,32 @@ export default function DashboardTaller() {
   const agregarFilaTarea = () => setFormPesado(p => ({ ...p, tareas: [...p.tareas, { descripcion: '', horas: '', fInicio: '', fFin: '' }] }));
   const agregarFilaRepuesto = () => setFormPesado(p => ({ ...p, repuestos: [...p.repuestos, { cant: '', unidad: '', descripcion: '' }] }));
 
+  const obtenerSiguienteNumeroOT = async (): Promise<{ numeroStr: string; numeroInt: number }> => {
+    const contadorRef = doc(db, 'configuracion', 'contadores_ot');
+    return await runTransaction(db, async (transaction) => {
+      const snapContador = await transaction.get(contadorRef);
+      let valorActual = 0;
+
+      if (snapContador.exists()) {
+        valorActual = snapContador.data().ultimoNumero || 0;
+      }
+
+      let siguiente = valorActual + 1;
+      if (siguiente > 1000) {
+        siguiente = 1;
+      }
+
+      transaction.set(contadorRef, { ultimoNumero: siguiente, actualizado: serverTimestamp() }, { merge: true });
+      return {
+        numeroInt: siguiente,
+        numeroStr: `OT-${String(siguiente).padStart(4, '0')}`
+      };
+    });
+  };
+
   const guardarOT = async () => {
     if (!citaSeleccionada || !vehiculoData) return;
-    const confirmar = window.confirm("¿Confirmar y cerrar la Orden de Trabajo? Una vez guardada no podras modificarla.");
+    const confirmar = window.confirm("¿Confirmar y cerrar la Orden de Trabajo? Una vez guardada no podrás modificarla.");
     if (!confirmar) return;
 
     setGuardando(true);
@@ -144,17 +167,23 @@ export default function DashboardTaller() {
     try {
       const nombreCreador = perfilTaller ? perfilTaller.nombreTaller : 'Taller Asociado';
 
+      const correlativo = await obtenerSiguienteNumeroOT();
+
       await addDoc(collection(db, 'ordenes_trabajo'), {
+        numeroOT: correlativo.numeroStr,
+        correlativoInt: correlativo.numeroInt,
         idCita: citaSeleccionada.id,
         patente: citaSeleccionada.patente,
         tipoVehiculo: vehiculoData.tipo,
         datos: datosOT,
         fechaCreacion: serverTimestamp(),
-        creadoPor: nombreCreador
+        creadoPor: nombreCreador,
+        tallerId: auth.currentUser?.uid || ''
       });
 
       await updateDoc(doc(db, 'citas_taller', citaSeleccionada.id), {
-        estado: 'completada'
+        estado: 'completada',
+        numeroOT: correlativo.numeroStr
       });
 
       if (proxMantenimiento) {
@@ -163,14 +192,14 @@ export default function DashboardTaller() {
         });
       }
 
-      await logAccion('CREAR_OT', `El taller ${nombreCreador} generó la Orden de Trabajo para el vehículo ${citaSeleccionada.patente}`);
+      await logAccion('CREAR_OT', `El taller ${nombreCreador} generó la ${correlativo.numeroStr} para el vehículo ${citaSeleccionada.patente}`);
 
-      alert("Orden de Trabajo guardada y proximo mantenimiento actualizado.");
+      alert(`Orden de Trabajo ${correlativo.numeroStr} guardada y cerrado el ingreso.`);
       seleccionarCita(citaSeleccionada);
       cargarCitasYPerfil();
     } catch (error) {
       console.error(error);
-      alert("Error al guardar OT");
+      alert("Error al generar la Orden de Trabajo correlativa.");
     } finally {
       setGuardando(false);
     }
@@ -197,7 +226,7 @@ export default function DashboardTaller() {
                 </a>
               </div>
             ) : (
-              <p className="text-slate-500">Gestión de Ordenes de Trabajo</p>
+              <p className="text-slate-500">Gestión de Órdenes de Trabajo</p>
             )}
           </div>
           <button onClick={manejarCerrarSesion} className="bg-slate-200 text-slate-700 font-bold py-2 px-6 rounded-xl hover:bg-slate-300">Salir</button>
@@ -263,13 +292,16 @@ export default function DashboardTaller() {
 
                 <div className="bg-white rounded-3xl shadow-lg p-6 border border-slate-100">
                   <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-2">
-                    <h2 className="text-xl font-black text-slate-800">Orden de Trabajo (OT)</h2>
+                    <h2 className="text-xl font-black text-slate-800">
+                      Orden de Trabajo (OT) {otExistente?.numeroOT && <span className="text-blue-600 font-mono font-black ml-2">[{otExistente.numeroOT}]</span>}
+                    </h2>
                     {otExistente && <span className="bg-slate-800 text-white text-xs font-bold px-3 py-1 rounded-full">SOLO LECTURA</span>}
                   </div>
 
                   {otExistente ? (
-                    <div className="p-4 bg-slate-50 rounded-xl text-slate-600 text-sm">
-                      La Orden de Trabajo ya fue completada y enviada a administración. No puede ser modificada.
+                    <div className="p-4 bg-slate-50 rounded-xl text-slate-600 text-sm space-y-2">
+                      <p>La <strong>{otExistente.numeroOT || 'Orden de Trabajo'}</strong> ya fue completada y registrada en el sistema de administración.</p>
+                      <p className="text-xs text-slate-500">Creado por: {otExistente.creadoPor || 'Taller'}</p>
                     </div>
                   ) : !vehiculoData ? (
                     <p className="text-sm text-slate-500">Cargando datos del vehículo...</p>
@@ -341,7 +373,7 @@ export default function DashboardTaller() {
                       )}
 
                       <button onClick={guardarOT} disabled={guardando} className="mt-6 w-full bg-slate-800 text-white font-bold py-4 rounded-xl hover:bg-slate-900 transition-all">
-                        {guardando ? 'Guardando OT...' : 'Generar y Cerrar OT'}
+                        {guardando ? 'Generando correlativo y guardando OT...' : 'Generar y Cerrar OT'}
                       </button>
                     </>
                   )}

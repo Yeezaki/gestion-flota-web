@@ -18,6 +18,9 @@ type IdentificacionConductorProps = {
   setFotoLicencia: (val: File | null) => void;
   ubicacionGPS: UbicacionGPS | null;
   setUbicacionGPS: (val: UbicacionGPS | null) => void;
+  vehiculo?: any;
+  forzarDescarga?: (url: string, nombre: string) => void;
+  calcularEstadoVencimiento?: (fecha: string) => { texto: string; clase: string };
   onContinuar: () => void;
 };
 
@@ -54,10 +57,14 @@ export default function IdentificacionConductor({
   setFotoLicencia,
   ubicacionGPS,
   setUbicacionGPS,
+  vehiculo,
+  forzarDescarga,
+  calcularEstadoVencimiento,
   onContinuar
 }: IdentificacionConductorProps) {
   const [error, setError] = useState<string | null>(null);
   const [obteniendoGPS, setObteniendoGPS] = useState(false);
+  const [mostrarDocs, setMostrarDocs] = useState(true);
 
   const manejarCambioRut = (e: React.ChangeEvent<HTMLInputElement>) => {
     const formateado = formatearRutChileno(e.target.value);
@@ -78,7 +85,7 @@ export default function IdentificacionConductor({
 
   const capturarUbicacion = () => {
     if (!navigator.geolocation) {
-      setError('Tu navegador o dispositivo no soporta geolocalización GPS.');
+      setError('Tu dispositivo o navegador no soporta geolocalización GPS.');
       return;
     }
 
@@ -102,9 +109,9 @@ export default function IdentificacionConductor({
       (err) => {
         setObteniendoGPS(false);
         if (err.code === err.PERMISSION_DENIED) {
-          setError('Permiso de GPS denegado. Habilita los permisos de ubicación en tu navegador para continuar.');
+          setError('Permiso de GPS denegado. Concede permiso de ubicación en tu navegador para continuar.');
         } else {
-          setError('No fue posible obtener la señal de GPS. Intenta en un lugar más despejado.');
+          setError('No fue posible obtener señal GPS. Intenta nuevamente.');
         }
       },
       {
@@ -143,12 +150,112 @@ export default function IdentificacionConductor({
     onContinuar();
   };
 
+  // Los 5 documentos exactos basados en la estructura de tu base de datos y FormChecklist
+  const docsDisponibles = [
+    {
+      nombre: 'Permiso de Circulación',
+      url: vehiculo?.urlCirculacion,
+      fecha: vehiculo?.vencimientoCirculacion
+    },
+    {
+      nombre: 'Revisión Técnica',
+      url: vehiculo?.urlRevision,
+      fecha: vehiculo?.vencimientoRevision
+    },
+    {
+      nombre: 'Seguro Obligatorio (SOAP)',
+      url: vehiculo?.urlSoap,
+      fecha: vehiculo?.vencimientoSoap
+    },
+    {
+      nombre: 'Certificado',
+      url: vehiculo?.urlCertificado,
+      fecha: vehiculo?.vencimientoCertificado
+    },
+    {
+      nombre: 'Pauta de Mantención',
+      url: vehiculo?.urlPauta,
+      fecha: null // La pauta no maneja vencimiento en tu lógica actual
+    }
+  ];
+
+  const descargarArchivo = (url: string, nombre: string) => {
+    if (forzarDescarga) {
+      forzarDescarga(url, nombre);
+    } else {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+  };
+
   return (
-    <div className="bg-white/60 backdrop-blur-md p-8 rounded-3xl shadow-2xl max-w-md w-full border border-white/50 animate-fade-in relative z-10">
+    <div className="bg-white/60 backdrop-blur-md p-6 md:p-8 rounded-3xl shadow-2xl max-w-md w-full border border-white/50 animate-fade-in relative z-10">
       <div className="text-center mb-6">
         <span className="bg-blue-100/90 text-blue-700 text-xs font-black uppercase px-3 py-1 rounded-full shadow-sm">Control de Flota</span>
         <h1 className="text-2xl font-black text-slate-800 mt-3">Identificación</h1>
         <p className="text-sm text-slate-600 mt-1 font-mono font-bold tracking-wider">Patente: {patente.toUpperCase()}</p>
+      </div>
+
+      <div className="mb-6 bg-white/80 border border-slate-200 rounded-2xl p-4 shadow-sm">
+        <div className="flex justify-between items-center mb-2">
+          <div className="flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <span className="text-xs font-black text-slate-700 uppercase tracking-wider">
+              Documentos del Vehículo
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setMostrarDocs(!mostrarDocs)}
+            className="text-xs font-bold text-blue-600 hover:text-blue-800"
+          >
+            {mostrarDocs ? 'Ocultar' : 'Ver'}
+          </button>
+        </div>
+
+        {mostrarDocs && (
+          <div className="space-y-2 mt-3 pt-3 border-t border-slate-100">
+            {docsDisponibles.map((docItem, idx) => {
+              const estado = calcularEstadoVencimiento && docItem.fecha ? calcularEstadoVencimiento(docItem.fecha) : null;
+              const tieneArchivo = Boolean(docItem.url);
+
+              return (
+                <div key={idx} className="flex justify-between items-center bg-slate-50/90 p-2.5 rounded-xl border border-slate-200/60">
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-slate-800">{docItem.nombre}</span>
+                    {estado ? (
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full mt-1 border w-fit ${estado.clase}`}>
+                        {estado.texto}
+                      </span>
+                    ) : docItem.fecha ? (
+                      <span className="text-[10px] text-slate-500 mt-0.5">Vence: {docItem.fecha}</span>
+                    ) : (
+                      <span className="text-[10px] text-slate-400 mt-0.5">Sin caducidad / No registrada</span>
+                    )}
+                  </div>
+
+                  {tieneArchivo ? (
+                    <button
+                      type="button"
+                      onClick={() => descargarArchivo(docItem.url, `${docItem.nombre}_${patente}.pdf`)}
+                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs transition-colors shadow-sm flex items-center gap-1"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      Descargar
+                    </button>
+                  ) : (
+                    <span className="text-[10px] font-bold text-slate-400 bg-slate-200/60 px-2 py-1 rounded-lg">
+                      No adjunto
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {error && (
@@ -168,6 +275,7 @@ export default function IdentificacionConductor({
             className="w-full p-4 bg-white/70 border border-white/80 rounded-2xl font-bold text-slate-800 focus:border-blue-500 focus:bg-white/90 focus:outline-none transition-all shadow-sm" 
           />
         </div>
+
         <div>
           <label className="block text-xs font-black text-slate-600 uppercase mb-1 ml-1">RUT</label>
           <input 
@@ -179,6 +287,7 @@ export default function IdentificacionConductor({
             className="w-full p-4 bg-white/70 border border-white/80 rounded-2xl font-bold text-slate-800 focus:border-blue-500 focus:bg-white/90 focus:outline-none transition-all shadow-sm" 
           />
         </div>
+
         <div>
           <label className="block text-xs font-black text-slate-600 uppercase mb-1 ml-1">Foto Licencia de Conducir</label>
           <label className="block w-full cursor-pointer">
@@ -202,7 +311,6 @@ export default function IdentificacionConductor({
           </label>
         </div>
 
-        {/* Captura de Ubicación GPS */}
         <div>
           <label className="block text-xs font-black text-slate-600 uppercase mb-1 ml-1">Ubicación de Salida / Faena</label>
           <button

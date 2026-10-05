@@ -500,7 +500,7 @@ export default function VistaConductor() {
 
   return (
     <div className="min-h-screen bg-cover bg-center bg-fixed bg-no-repeat flex flex-col items-center justify-center p-4 md:p-6 relative" style={{ backgroundImage: "url('/fondo-conductor.jpg')" }}>
-      {/* 1. Identificación */}
+      {/* 1. Identificación y Descarga Inmediata de Documentos */}
       {!identificado && (
         <IdentificacionConductor
           patente={patenteValida}
@@ -513,6 +513,9 @@ export default function VistaConductor() {
           setFotoLicencia={setFotoLicencia}
           ubicacionGPS={ubicacionGPS}
           setUbicacionGPS={setUbicacionGPS}
+          vehiculo={vehiculo}
+          forzarDescarga={forzarDescarga}
+          calcularEstadoVencimiento={calcularEstadoVencimiento}
           onContinuar={() => {
             const parejaElegida = seleccionarParejaAleatoria();
             setParejaTests(parejaElegida);
@@ -570,7 +573,7 @@ export default function VistaConductor() {
         <div className="bg-white/70 backdrop-blur-md p-8 rounded-3xl shadow-2xl max-w-md border-2 border-red-500/80 animate-fade-in w-full relative z-10 text-center">
           <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
           </div>
 

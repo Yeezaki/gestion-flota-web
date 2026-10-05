@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
-import { collection, query, orderBy, deleteDoc, doc, where, addDoc, serverTimestamp, onSnapshot, getDocs } from 'firebase/firestore';
+import { collection, query, deleteDoc, doc, where, addDoc, serverTimestamp, onSnapshot, getDocs } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { db, auth } from '../lib/firebase';
 import { toPng } from 'html-to-image';
@@ -24,18 +24,15 @@ export default function DashboardGenerador() {
     const user = auth.currentUser;
     if (!user) return;
 
-    // 1. Escuchar el perfil en tiempo real
     const unsubscribePerfil = onSnapshot(doc(db, 'usuarios', user.uid), (docSnap) => {
       if (docSnap.exists()) {
         setPerfil({ id: user.uid, ...docSnap.data() });
       }
     });
 
-    // 2. Escuchar los QRs creados por este usuario en tiempo real
     const q = query(collection(db, 'qrs_guardados'), where('creadoPor', '==', user.uid));
     const unsubscribeQRs = onSnapshot(q, (snap) => {
       const qrs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      // Ordenamos en local para no requerir un índice compuesto en Firebase
       qrs.sort((a: any, b: any) => {
         const timeA = a.fechaRegistro?.toMillis ? a.fechaRegistro.toMillis() : 0;
         const timeB = b.fechaRegistro?.toMillis ? b.fechaRegistro.toMillis() : 0;
@@ -44,10 +41,10 @@ export default function DashboardGenerador() {
       setMisQRs(qrs);
     });
 
-    // 3. Escuchar la flota asignada al usuario autenticado, ordenada alfabéticamente por patente/identificador
-    const qVehiculos = query(collection(db, 'vehiculos'), where('ownerId', '==', user.uid), orderBy('identificador', 'asc'));
+    const qVehiculos = query(collection(db, 'vehiculos'), where('ownerId', '==', user.uid));
     const unsubscribeVehiculos = onSnapshot(qVehiculos, (snap) => {
       const lista = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      lista.sort((a: any, b: any) => (a.patente || '').localeCompare(b.patente || ''));
       setVehiculos(lista);
     });
 
@@ -99,7 +96,7 @@ export default function DashboardGenerador() {
         tipo: tipoVehiculo,
         url: urlVehiculo,
         creadoPor: user.uid,
-        creadoPorNombre: perfil?.razonSocial || perfil?.email || 'Generador',
+        creadoPorNombre: perfil?.razonSocial || perfil?.email || 'Empresa',
         creadoPorDetalles: `Tel: ${perfil?.telefono || 'N/A'} - Dir: ${perfil?.direccion || 'N/A'}`,
         fechaRegistro: serverTimestamp()
       });
@@ -115,6 +112,7 @@ export default function DashboardGenerador() {
           modelo: '',
           anio: '',
           ownerId: user.uid,
+          empresa: perfil?.razonSocial || '',
           identificador: patenteMayuscula,
           vencimientoRevision: '',
           vencimientoCirculacion: '',
@@ -136,7 +134,7 @@ export default function DashboardGenerador() {
         const file = new File([pdfBlob], nombreArchivo, { type: 'application/pdf' });
 
         if (esCelular && typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
-          try { await navigator.share({ files: [file] }); } catch (e) { pdf.save(nombreArchivo); }
+          try { await navigator.share({ files: [file] }); } catch { pdf.save(nombreArchivo); }
         } else {
           pdf.save(nombreArchivo);
         }
@@ -156,7 +154,6 @@ export default function DashboardGenerador() {
     if (confirmar) {
       try {
         await deleteDoc(doc(db, 'qrs_guardados', id));
-        // No necesitamos hacer setMisQRs porque el onSnapshot lo hará automáticamente
       } catch (error) {
         console.error(error);
       }
@@ -202,20 +199,26 @@ export default function DashboardGenerador() {
       <div className="max-w-6xl mx-auto">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b border-slate-200 pb-6">
           <div>
-            <h1 className="text-3xl font-black text-slate-800">Panel de Generador</h1>
+            <span className="text-[10px] font-black uppercase tracking-wider text-purple-700 bg-purple-100 px-3 py-1 rounded-full">
+              Portal Empresa Cliente
+            </span>
+            <h1 className="text-3xl font-black text-slate-800 mt-2">Gestión de Flota Asignada</h1>
             <p className="text-slate-500 font-medium">{perfil?.razonSocial || perfil?.email}</p>
           </div>
           
           <div className="flex items-center gap-4">
-            <div className="bg-purple-100 text-purple-800 px-4 py-2 rounded-xl font-bold border border-purple-200">
-              QRs Usados: {misQRs.length} / {limitePermitido}
+            <div className="bg-purple-100 text-purple-800 px-4 py-2 rounded-xl font-bold border border-purple-200 text-sm">
+              QRs en uso: {misQRs.length} / {limitePermitido}
             </div>
-            <button onClick={manejarCerrarSesion} className="bg-slate-200 text-slate-700 font-bold py-2 px-6 rounded-xl hover:bg-slate-300 transition-all text-center">Salir</button>
+            <button onClick={manejarCerrarSesion} className="bg-slate-200 text-slate-700 font-bold py-2 px-6 rounded-xl hover:bg-slate-300 transition-all text-center text-sm">
+              Salir
+            </button>
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
+          {/* Columna Izquierda: Generar QR */}
           <div className="lg:col-span-1">
             <div className="bg-white p-8 rounded-3xl shadow-lg border border-slate-100 h-fit">
               <h2 className="text-xl font-black text-slate-800 mb-6">Nuevo Código QR</h2>
@@ -251,10 +254,11 @@ export default function DashboardGenerador() {
             </div>
           </div>
 
-          <div className="lg:col-span-2">
+          {/* Columna Derecha: Códigos y Flota Exclusiva */}
+          <div className="lg:col-span-2 space-y-6">
             <div className="bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-100">
               <div className="p-6 bg-slate-50 border-b border-slate-100">
-                <h2 className="text-xl font-bold text-slate-800">Mis Códigos Activos</h2>
+                <h2 className="text-xl font-bold text-slate-800">Mis Códigos QR Activos</h2>
                 <p className="text-sm text-slate-500 mt-1">Si borras un código, recuperarás espacio en tu plan automáticamente.</p>
               </div>
 
@@ -283,33 +287,41 @@ export default function DashboardGenerador() {
                     ))}
                   </div>
                 )}
-
-                <div className="mt-8 border-t border-slate-100 pt-6">
-                  <h3 className="text-lg font-black text-slate-800 mb-4">Mi Flota</h3>
-                  {vehiculos.length === 0 ? (
-                    <div className="text-center py-6 border-2 border-dashed border-slate-200 rounded-2xl">
-                      <p className="text-slate-400 font-medium">No hay vehículos asociados a esta cuenta.</p>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {vehiculos.map((vehiculo) => (
-                        <div key={vehiculo.id} className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xl font-black text-slate-800 tracking-wider">{vehiculo.patente || vehiculo.identificador}</span>
-                            <span className="text-[10px] font-bold text-slate-500 uppercase">{vehiculo.tipo || 'Camioneta'}</span>
-                          </div>
-                          <div className="mt-3 space-y-1 text-[11px] text-slate-600">
-                            <div><span className="font-bold text-slate-700">Marca:</span> {vehiculo.marca || '--'}</div>
-                            <div><span className="font-bold text-slate-700">Modelo:</span> {vehiculo.modelo || '--'}</div>
-                            <div><span className="font-bold text-slate-700">Año:</span> {vehiculo.anio || '--'}</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
               </div>
             </div>
+
+            <div className="bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-100">
+              <div className="p-6 bg-slate-50 border-b border-slate-100">
+                <h2 className="text-xl font-bold text-slate-800">Mi Flota Exclusiva ({vehiculos.length})</h2>
+                <p className="text-sm text-slate-500 mt-1">Vehículos registrados y monitoreados bajo tu cuenta.</p>
+              </div>
+
+              <div className="p-6">
+                {vehiculos.length === 0 ? (
+                  <div className="text-center py-6 border-2 border-dashed border-slate-200 rounded-2xl">
+                    <p className="text-slate-400 font-medium">No hay vehículos asociados a esta cuenta.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {vehiculos.map((vehiculo) => (
+                      <div key={vehiculo.id} className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xl font-black text-slate-800 tracking-wider">{vehiculo.patente || vehiculo.identificador}</span>
+                          <span className="text-[10px] font-bold text-slate-500 uppercase bg-white px-2 py-0.5 rounded border border-slate-200">
+                            {vehiculo.tipo || 'Camioneta'}
+                          </span>
+                        </div>
+                        <div className="mt-3 space-y-1 text-xs text-slate-600">
+                          <div><span className="font-bold text-slate-700">Marca/Modelo:</span> {vehiculo.marca || '--'} {vehiculo.modelo || ''}</div>
+                          <div><span className="font-bold text-slate-700">Último Odómetro:</span> {vehiculo.kilometrajeActual ? `${vehiculo.kilometrajeActual} km` : 'Sin registro'}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
           </div>
 
         </div>
