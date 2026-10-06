@@ -26,10 +26,12 @@ type Pelota = {
 export default function TestSeguimiento({ onFinalizado }: TestSeguimientoProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [fase, setFase] = useState<'instrucciones' | 'memorizar' | 'movimiento' | 'seleccion' | 'resultado'>('instrucciones');
-  const [aciertos, setAciertos] = useState(0);
-  const [errores, setErrores] = useState(0);
   const [rondaActual, setRondaActual] = useState(1);
   const totalRondas = 3;
+
+  // Se cambian los contadores a useRef para registro instantaneo y sin perdidas
+  const aciertosRef = useRef(0);
+  const erroresRef = useRef(0);
 
   const pelotasRef = useRef<Pelota[]>([]);
   const animacionRef = useRef<number | null>(null);
@@ -139,6 +141,12 @@ export default function TestSeguimiento({ onFinalizado }: TestSeguimientoProps) 
   };
 
   const iniciarRonda = () => {
+    if (rondaActual === 1) {
+      aciertosRef.current = 0;
+      erroresRef.current = 0;
+      tiemposRespuesta.current = [];
+    }
+
     inicializarPelotas();
     setFase('memorizar');
     faseRef.current = 'memorizar';
@@ -165,6 +173,8 @@ export default function TestSeguimiento({ onFinalizado }: TestSeguimientoProps) 
 
   const manejarPulsacion = (e: React.PointerEvent<HTMLCanvasElement>) => {
     e.preventDefault();
+    e.stopPropagation();
+
     if (fase !== 'seleccion') return;
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -189,10 +199,11 @@ export default function TestSeguimiento({ onFinalizado }: TestSeguimientoProps) 
         tiemposRespuesta.current.push(tiempoRespuesta);
 
         const objetivosAcertados = seleccionadas.filter((p) => p.esObjetivo).length;
+        
         if (objetivosAcertados === 2) {
-          setAciertos((prev) => prev + 1);
+          aciertosRef.current += 1;
         } else {
-          setErrores((prev) => prev + (2 - objetivosAcertados));
+          erroresRef.current += (2 - objetivosAcertados);
         }
 
         if (rondaActual < totalRondas) {
@@ -205,12 +216,12 @@ export default function TestSeguimiento({ onFinalizado }: TestSeguimientoProps) 
               ? Math.round(tiemposRespuesta.current.reduce((a, b) => a + b, 0) / tiemposRespuesta.current.length)
               : 0;
 
-            const aprobado = aciertos + (objetivosAcertados === 2 ? 1 : 0) >= 2;
+            const aprobado = aciertosRef.current >= 2;
 
             onFinalizado({
               aprobado,
               promedioMs: promedio,
-              erroresComision: errores + (2 - objetivosAcertados),
+              erroresComision: erroresRef.current,
               erroresOmision: 0,
               tipoTest: 'Seguimiento Múltiple (MOT)'
             });

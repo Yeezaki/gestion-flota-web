@@ -20,8 +20,10 @@ export default function TestCognitivo({ onFinalizado }: TestCognitivoProps) {
 
   const secuenciaColores = useRef<Array<'verde' | 'rojo'>>([]);
   const tiemposReaccion = useRef<number[]>([]);
-  const [erroresComision, setErroresComision] = useState(0);
-  const [erroresOmision, setErroresOmision] = useState(0);
+  
+  // CORRECCIÓN: Usar useRef garantiza que el conteo de errores sea instantáneo y nunca se pierda en la última ronda.
+  const erroresComision = useRef(0);
+  const erroresOmision = useRef(0);
 
   const tiempoInicioEstimulo = useRef<number>(0);
   const temporizadorEstimulo = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -38,8 +40,8 @@ export default function TestCognitivo({ onFinalizado }: TestCognitivoProps) {
 
   const iniciarTest = () => {
     tiemposReaccion.current = [];
-    setErroresComision(0);
-    setErroresOmision(0);
+    erroresComision.current = 0;
+    erroresOmision.current = 0;
 
     const base: Array<'verde' | 'rojo'> = ['verde', 'verde', 'verde', 'rojo', 'rojo', 'rojo'];
     secuenciaColores.current = base.sort(() => Math.random() - 0.5);
@@ -59,12 +61,11 @@ export default function TestCognitivo({ onFinalizado }: TestCognitivoProps) {
       setColorPelota(colorActual);
       setFase('estimulo');
 
-      // Se fija el inicio del reloj en el momento exacto en que React encola el render de la pelota
       tiempoInicioEstimulo.current = performance.now();
 
       if (colorActual === 'verde') {
         temporizadorOmision.current = setTimeout(() => {
-          setErroresOmision((prev) => prev + 1);
+          erroresOmision.current += 1;
           siguienteRonda();
         }, 1300);
       } else {
@@ -76,13 +77,12 @@ export default function TestCognitivo({ onFinalizado }: TestCognitivoProps) {
   };
 
   const manejarPulsacion = (e: React.PointerEvent) => {
-    // Evita scroll, doble clic de zoom o selecciones
     e.preventDefault();
     e.stopPropagation();
 
     if (fase === 'espera') {
       limpiarTemporizadores();
-      setErroresComision((prev) => prev + 1);
+      erroresComision.current += 1;
       siguienteRonda();
       return;
     }
@@ -95,7 +95,7 @@ export default function TestCognitivo({ onFinalizado }: TestCognitivoProps) {
       if (colorPelota === 'verde') {
         tiemposReaccion.current.push(duracion);
       } else {
-        setErroresComision((prev) => prev + 1);
+        erroresComision.current += 1;
       }
 
       siguienteRonda();
@@ -122,7 +122,7 @@ export default function TestCognitivo({ onFinalizado }: TestCognitivoProps) {
       let promedioFinal = 999;
 
       if (tiempos.length > 0) {
-        // Descartamos el intento más lento (lag del móvil) si hay al menos 3 aciertos
+        // Descartamos el intento más lento si hay al menos 3 aciertos
         if (tiempos.length >= 3) {
           tiempos.sort((a, b) => a - b);
           tiempos.pop();
@@ -130,13 +130,16 @@ export default function TestCognitivo({ onFinalizado }: TestCognitivoProps) {
         promedioFinal = Math.round(tiempos.reduce((a, b) => a + b, 0) / tiempos.length);
       }
 
-      const aprobado = promedioFinal <= 750 && erroresComision <= 1 && erroresOmision <= 1;
+      const eComision = erroresComision.current;
+      const eOmision = erroresOmision.current;
+
+      const aprobado = promedioFinal <= 750 && eComision <= 1 && eOmision <= 1;
 
       onFinalizado({
         aprobado,
         promedioMs: promedioFinal,
-        erroresComision,
-        erroresOmision,
+        erroresComision: eComision,
+        erroresOmision: eOmision,
         tipoTest: 'Reaccion e Inhibicion (Go/No-Go)'
       });
     }, 1000);
