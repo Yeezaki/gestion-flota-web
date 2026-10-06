@@ -432,8 +432,8 @@ export default function VistaConductor() {
       if (!t.aprobado) puntos -= 40;
       if (t.erroresComision) puntos -= (t.erroresComision * 10);
       if (t.erroresOmision) puntos -= (t.erroresOmision * 10);
-      if (t.promedioMs && t.promedioMs > 500 && t.tipoTest && t.tipoTest.includes('Reaccion')) {
-        const penalizacionMs = Math.min(25, Math.round((t.promedioMs - 500) / 10));
+      if (t.promedioMs && t.promedioMs > 580 && t.tipoTest && t.tipoTest.includes('Reaccion')) {
+        const penalizacionMs = Math.min(20, Math.round((t.promedioMs - 580) / 10));
         puntos -= penalizacionMs;
       }
     });
