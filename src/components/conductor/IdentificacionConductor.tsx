@@ -64,7 +64,6 @@ export default function IdentificacionConductor({
   ubicacionGPS,
   setUbicacionGPS,
   vehiculo,
-  forzarDescarga,
   calcularEstadoVencimiento,
   onContinuar
 }: IdentificacionConductorProps) {
@@ -167,7 +166,47 @@ export default function IdentificacionConductor({
     onContinuar();
   };
 
-  // 1. Documentos Vehiculares y Mecánicos (incluye Torque)
+  // Función de apertura/descarga robusta frente a CORS y restricciones móviles
+  const descargarArchivo = async (url: string, nombreVisible: string) => {
+    if (!url) {
+      alert("El enlace del documento no está disponible.");
+      return;
+    }
+
+    const esDispositivoMovil = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+    // En móviles, abrir directamente la URL de Firebase Storage en una pestaña nueva
+    // permite visualizar y guardar el PDF de forma nativa sin ser bloqueado por CORS.
+    if (esDispositivoMovil) {
+      window.open(url, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    const nombreLimpio = `${nombreVisible.replace(/\s+/g, '_')}_${patente.toUpperCase()}.pdf`;
+
+    try {
+      const respuesta = await fetch(url);
+      if (!respuesta.ok) throw new Error("Fallo en la red");
+
+      const blob = await respuesta.blob();
+      const urlBlob = window.URL.createObjectURL(blob);
+      const enlace = document.createElement('a');
+      enlace.style.display = 'none';
+      enlace.href = urlBlob;
+      enlace.download = nombreLimpio;
+      document.body.appendChild(enlace);
+      enlace.click();
+
+      setTimeout(() => {
+        document.body.removeChild(enlace);
+        window.URL.revokeObjectURL(urlBlob);
+      }, 200);
+    } catch {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+  };
+
+  // 1. Documentos Vehiculares y Mecánicos (nombres vinculados exactamente a Firestore)
   const docsVehiculo = [
     {
       nombre: 'Permiso de Circulación',
@@ -191,7 +230,7 @@ export default function IdentificacionConductor({
     },
     {
       nombre: 'Certificado de Torque Vigente',
-      url: vehiculo?.urlTorque,
+      url: vehiculo?.urlCertificadoTorque || vehiculo?.urlTorque,
       fecha: vehiculo?.vencimientoTorque
     },
     {
@@ -201,27 +240,19 @@ export default function IdentificacionConductor({
     }
   ];
 
-  // 2. Documentación Preventiva, de Seguridad y Faena
+  // 2. Documentación Preventiva, de Seguridad y Faena (nombres vinculados exactamente a Firestore)
   const docsSeguridadFaena = [
     { nombre: 'Mapa de Riesgos de Conducción', url: vehiculo?.urlMapaRiesgos },
     { nombre: 'MIPER de Conducción', url: vehiculo?.urlMiper },
-    { nombre: 'Procedimiento de Conducción', url: vehiculo?.urlProcedimientoConduccion },
-    { nombre: 'Evidencia Eval. Procedimiento', url: vehiculo?.urlEvidenciaConduccion },
     { nombre: 'Plan de Tránsito', url: vehiculo?.urlPlanTransito },
-    { nombre: 'Evidencia Eval. Plan Tránsito', url: vehiculo?.urlEvidenciaTransito },
     { nombre: 'Plan de Emergencia', url: vehiculo?.urlPlanEmergencia },
-    { nombre: 'Evidencia Eval. Emergencia', url: vehiculo?.urlEvidenciaEmergencia },
+    { nombre: 'Procedimiento de Conducción', url: vehiculo?.urlProcedimientoConduccion },
     { nombre: 'Gestión y Control Alcohol y Drogas', url: vehiculo?.urlAlcoholDrogas },
+    { nombre: 'Evidencia Eval. Procedimiento', url: vehiculo?.urlEvidenciaConduccion },
+    { nombre: 'Evidencia Eval. Plan Tránsito', url: vehiculo?.urlEvidenciaTransito },
+    { nombre: 'Evidencia Eval. Emergencia', url: vehiculo?.urlEvidenciaEmergencia },
     { nombre: 'Reporte Control de Velocidad (GPS)', url: vehiculo?.urlReporteGPS }
   ];
-
-  const descargarArchivo = (url: string, nombre: string) => {
-    if (forzarDescarga) {
-      forzarDescarga(url, nombre);
-    } else {
-      window.open(url, '_blank', 'noopener,noreferrer');
-    }
-  };
 
   return (
     <div className="bg-white/60 backdrop-blur-md p-6 md:p-8 rounded-3xl shadow-2xl max-w-md w-full border border-white/50 animate-fade-in relative z-10">
@@ -275,8 +306,8 @@ export default function IdentificacionConductor({
                   {tieneArchivo ? (
                     <button
                       type="button"
-                      onClick={() => descargarArchivo(docItem.url, `${docItem.nombre}_${patente}.pdf`)}
-                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs transition-colors shadow-sm flex items-center gap-1"
+                      onClick={() => descargarArchivo(docItem.url, docItem.nombre)}
+                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs transition-colors shadow-sm flex items-center gap-1 shrink-0"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -284,7 +315,7 @@ export default function IdentificacionConductor({
                       Descargar
                     </button>
                   ) : (
-                    <span className="text-[10px] font-bold text-slate-400 bg-slate-200/60 px-2 py-1 rounded-lg">
+                    <span className="text-[10px] font-bold text-slate-400 bg-slate-200/60 px-2 py-1 rounded-lg shrink-0">
                       No adjunto
                     </span>
                   )}
@@ -327,7 +358,7 @@ export default function IdentificacionConductor({
                   {tieneArchivo ? (
                     <button
                       type="button"
-                      onClick={() => descargarArchivo(docItem.url, `${docItem.nombre}_${patente}.pdf`)}
+                      onClick={() => descargarArchivo(docItem.url, docItem.nombre)}
                       className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition-colors shadow-sm flex items-center gap-1 shrink-0"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -377,7 +408,7 @@ export default function IdentificacionConductor({
           />
         </div>
 
-        {/* Licencia Municipal de Conducir (Obligatoria) */}
+        {/* Licencia Municipal de Conducir */}
         <div>
           <label className="block text-xs font-black text-slate-600 uppercase mb-1 ml-1">Licencia Municipal Vigente *</label>
           <label className="block w-full cursor-pointer">
@@ -401,7 +432,7 @@ export default function IdentificacionConductor({
           </label>
         </div>
 
-        {/* Licencia Interna de Faena (Opcional según operación) */}
+        {/* Licencia Interna de Faena */}
         {setFotoLicenciaInterna && (
           <div>
             <label className="block text-xs font-black text-slate-600 uppercase mb-1 ml-1">Licencia Interna de Faena (Opcional)</label>
