@@ -16,6 +16,9 @@ type IdentificacionConductorProps = {
   fotoLicenciaPreview: string | null;
   setFotoLicenciaPreview: (val: string | null) => void;
   setFotoLicencia: (val: File | null) => void;
+  fotoLicenciaInternaPreview?: string | null;
+  setFotoLicenciaInternaPreview?: (val: string | null) => void;
+  setFotoLicenciaInterna?: (val: File | null) => void;
   ubicacionGPS: UbicacionGPS | null;
   setUbicacionGPS: (val: UbicacionGPS | null) => void;
   vehiculo?: any;
@@ -55,6 +58,9 @@ export default function IdentificacionConductor({
   fotoLicenciaPreview,
   setFotoLicenciaPreview,
   setFotoLicencia,
+  fotoLicenciaInternaPreview,
+  setFotoLicenciaInternaPreview,
+  setFotoLicenciaInterna,
   ubicacionGPS,
   setUbicacionGPS,
   vehiculo,
@@ -64,7 +70,8 @@ export default function IdentificacionConductor({
 }: IdentificacionConductorProps) {
   const [error, setError] = useState<string | null>(null);
   const [obteniendoGPS, setObteniendoGPS] = useState(false);
-  const [mostrarDocs, setMostrarDocs] = useState(true);
+  const [mostrarDocsVehiculo, setMostrarDocsVehiculo] = useState(true);
+  const [mostrarDocsFaena, setMostrarDocsFaena] = useState(false);
 
   const manejarCambioRut = (e: React.ChangeEvent<HTMLInputElement>) => {
     const formateado = formatearRutChileno(e.target.value);
@@ -80,6 +87,16 @@ export default function IdentificacionConductor({
       reader.onload = (event) => setFotoLicenciaPreview(event.target?.result as string);
       reader.readAsDataURL(file);
       if (error) setError(null);
+    }
+  };
+
+  const capturarLicenciaInterna = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0] && setFotoLicenciaInterna && setFotoLicenciaInternaPreview) {
+      const file = e.target.files[0];
+      setFotoLicenciaInterna(file);
+      const reader = new FileReader();
+      reader.onload = (event) => setFotoLicenciaInternaPreview(event.target?.result as string);
+      reader.readAsDataURL(file);
     }
   };
 
@@ -137,7 +154,7 @@ export default function IdentificacionConductor({
     }
 
     if (!fotoLicenciaPreview) {
-      setError('Falta subir la foto de la Licencia de Conducir.');
+      setError('Falta subir la foto de la Licencia Municipal de Conducir.');
       return;
     }
 
@@ -150,8 +167,8 @@ export default function IdentificacionConductor({
     onContinuar();
   };
 
-  // Los 5 documentos exactos basados en la estructura de tu base de datos y FormChecklist
-  const docsDisponibles = [
+  // 1. Documentos Vehiculares y Mecánicos (incluye Torque)
+  const docsVehiculo = [
     {
       nombre: 'Permiso de Circulación',
       url: vehiculo?.urlCirculacion,
@@ -168,15 +185,34 @@ export default function IdentificacionConductor({
       fecha: vehiculo?.vencimientoSoap
     },
     {
-      nombre: 'Certificado',
+      nombre: 'Certificado de Mantención Vigente',
       url: vehiculo?.urlCertificado,
       fecha: vehiculo?.vencimientoCertificado
     },
     {
-      nombre: 'Pauta de Mantención',
+      nombre: 'Certificado de Torque Vigente',
+      url: vehiculo?.urlTorque,
+      fecha: vehiculo?.vencimientoTorque
+    },
+    {
+      nombre: 'Programa / Pauta de Mantención',
       url: vehiculo?.urlPauta,
-      fecha: null // La pauta no maneja vencimiento en tu lógica actual
+      fecha: null
     }
+  ];
+
+  // 2. Documentación Preventiva, de Seguridad y Faena
+  const docsSeguridadFaena = [
+    { nombre: 'Mapa de Riesgos de Conducción', url: vehiculo?.urlMapaRiesgos },
+    { nombre: 'MIPER de Conducción', url: vehiculo?.urlMiper },
+    { nombre: 'Procedimiento de Conducción', url: vehiculo?.urlProcedimientoConduccion },
+    { nombre: 'Evidencia Eval. Procedimiento', url: vehiculo?.urlEvidenciaConduccion },
+    { nombre: 'Plan de Tránsito', url: vehiculo?.urlPlanTransito },
+    { nombre: 'Evidencia Eval. Plan Tránsito', url: vehiculo?.urlEvidenciaTransito },
+    { nombre: 'Plan de Emergencia', url: vehiculo?.urlPlanEmergencia },
+    { nombre: 'Evidencia Eval. Emergencia', url: vehiculo?.urlEvidenciaEmergencia },
+    { nombre: 'Gestión y Control Alcohol y Drogas', url: vehiculo?.urlAlcoholDrogas },
+    { nombre: 'Reporte Control de Velocidad (GPS)', url: vehiculo?.urlReporteGPS }
   ];
 
   const descargarArchivo = (url: string, nombre: string) => {
@@ -195,7 +231,8 @@ export default function IdentificacionConductor({
         <p className="text-sm text-slate-600 mt-1 font-mono font-bold tracking-wider">Patente: {patente.toUpperCase()}</p>
       </div>
 
-      <div className="mb-6 bg-white/80 border border-slate-200 rounded-2xl p-4 shadow-sm">
+      {/* Bloque 1: Documentación del Vehículo y Mecánica */}
+      <div className="mb-4 bg-white/80 border border-slate-200 rounded-2xl p-4 shadow-sm">
         <div className="flex justify-between items-center mb-2">
           <div className="flex items-center gap-2">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -207,16 +244,16 @@ export default function IdentificacionConductor({
           </div>
           <button
             type="button"
-            onClick={() => setMostrarDocs(!mostrarDocs)}
+            onClick={() => setMostrarDocsVehiculo(!mostrarDocsVehiculo)}
             className="text-xs font-bold text-blue-600 hover:text-blue-800"
           >
-            {mostrarDocs ? 'Ocultar' : 'Ver'}
+            {mostrarDocsVehiculo ? 'Ocultar' : 'Ver'}
           </button>
         </div>
 
-        {mostrarDocs && (
+        {mostrarDocsVehiculo && (
           <div className="space-y-2 mt-3 pt-3 border-t border-slate-100">
-            {docsDisponibles.map((docItem, idx) => {
+            {docsVehiculo.map((docItem, idx) => {
               const estado = calcularEstadoVencimiento && docItem.fecha ? calcularEstadoVencimiento(docItem.fecha) : null;
               const tieneArchivo = Boolean(docItem.url);
 
@@ -258,6 +295,58 @@ export default function IdentificacionConductor({
         )}
       </div>
 
+      {/* Bloque 2: Documentación de Seguridad y Faena */}
+      <div className="mb-6 bg-white/80 border border-slate-200 rounded-2xl p-4 shadow-sm">
+        <div className="flex justify-between items-center mb-2">
+          <div className="flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+            <span className="text-xs font-black text-slate-700 uppercase tracking-wider">
+              Seguridad Operacional y Faena
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setMostrarDocsFaena(!mostrarDocsFaena)}
+            className="text-xs font-bold text-emerald-600 hover:text-emerald-800"
+          >
+            {mostrarDocsFaena ? 'Ocultar' : 'Ver'}
+          </button>
+        </div>
+
+        {mostrarDocsFaena && (
+          <div className="space-y-2 mt-3 pt-3 border-t border-slate-100 max-h-60 overflow-y-auto pr-1">
+            {docsSeguridadFaena.map((docItem, idx) => {
+              const tieneArchivo = Boolean(docItem.url);
+
+              return (
+                <div key={idx} className="flex justify-between items-center bg-slate-50/90 p-2.5 rounded-xl border border-slate-200/60">
+                  <span className="text-xs font-bold text-slate-800 truncate pr-2">{docItem.nombre}</span>
+
+                  {tieneArchivo ? (
+                    <button
+                      type="button"
+                      onClick={() => descargarArchivo(docItem.url, `${docItem.nombre}_${patente}.pdf`)}
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition-colors shadow-sm flex items-center gap-1 shrink-0"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      Descargar
+                    </button>
+                  ) : (
+                    <span className="text-[10px] font-bold text-slate-400 bg-slate-200/60 px-2 py-1 rounded-lg shrink-0">
+                      No adjunto
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       {error && (
         <div className="mb-4 p-3 bg-red-100/90 border border-red-300 text-red-700 text-xs font-bold rounded-xl text-center leading-relaxed">
           {error}
@@ -288,14 +377,15 @@ export default function IdentificacionConductor({
           />
         </div>
 
+        {/* Licencia Municipal de Conducir (Obligatoria) */}
         <div>
-          <label className="block text-xs font-black text-slate-600 uppercase mb-1 ml-1">Foto Licencia de Conducir</label>
+          <label className="block text-xs font-black text-slate-600 uppercase mb-1 ml-1">Licencia Municipal Vigente *</label>
           <label className="block w-full cursor-pointer">
             <input type="file" accept="image/*" capture="environment" onChange={capturarLicencia} className="hidden" />
             <div className="border-2 border-dashed border-slate-300 bg-white/60 rounded-2xl p-4 text-center hover:bg-white/80 transition-all shadow-sm backdrop-blur-sm">
               {fotoLicenciaPreview ? (
                 <div className="flex flex-col items-center">
-                  <img src={fotoLicenciaPreview} className="mx-auto h-20 rounded-lg shadow-sm mb-1 object-cover" alt="Vista previa licencia" />
+                  <img src={fotoLicenciaPreview} className="mx-auto h-20 rounded-lg shadow-sm mb-1 object-cover" alt="Vista previa licencia municipal" />
                   <span className="text-[11px] font-bold text-blue-600">Presiona para cambiar foto</span>
                 </div>
               ) : (
@@ -304,12 +394,38 @@ export default function IdentificacionConductor({
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
-                  Tomar foto a la licencia
+                  Foto Licencia Municipal
                 </span>
               )}
             </div>
           </label>
         </div>
+
+        {/* Licencia Interna de Faena (Opcional según operación) */}
+        {setFotoLicenciaInterna && (
+          <div>
+            <label className="block text-xs font-black text-slate-600 uppercase mb-1 ml-1">Licencia Interna de Faena (Opcional)</label>
+            <label className="block w-full cursor-pointer">
+              <input type="file" accept="image/*" capture="environment" onChange={capturarLicenciaInterna} className="hidden" />
+              <div className="border-2 border-dashed border-slate-300 bg-white/60 rounded-2xl p-3 text-center hover:bg-white/80 transition-all shadow-sm backdrop-blur-sm">
+                {fotoLicenciaInternaPreview ? (
+                  <div className="flex flex-col items-center">
+                    <img src={fotoLicenciaInternaPreview} className="mx-auto h-16 rounded-lg shadow-sm mb-1 object-cover" alt="Vista previa licencia interna" />
+                    <span className="text-[11px] font-bold text-emerald-600">Presiona para cambiar foto</span>
+                  </div>
+                ) : (
+                  <span className="text-slate-500 text-xs font-bold flex items-center justify-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    Subir Licencia Interna de Faena
+                  </span>
+                )}
+              </div>
+            </label>
+          </div>
+        )}
 
         <div>
           <label className="block text-xs font-black text-slate-600 uppercase mb-1 ml-1">Ubicación de Salida / Faena</label>
