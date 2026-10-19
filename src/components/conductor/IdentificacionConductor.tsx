@@ -166,7 +166,6 @@ export default function IdentificacionConductor({
     onContinuar();
   };
 
-  // Función de apertura/descarga robusta frente a CORS y restricciones móviles
   const descargarArchivo = async (url: string, nombreVisible: string) => {
     if (!url) {
       alert("El enlace del documento no está disponible.");
@@ -175,8 +174,6 @@ export default function IdentificacionConductor({
 
     const esDispositivoMovil = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-    // En móviles, abrir directamente la URL de Firebase Storage en una pestaña nueva
-    // permite visualizar y guardar el PDF de forma nativa sin ser bloqueado por CORS.
     if (esDispositivoMovil) {
       window.open(url, '_blank', 'noopener,noreferrer');
       return;
@@ -206,7 +203,7 @@ export default function IdentificacionConductor({
     }
   };
 
-  // 1. Documentos Vehiculares y Mecánicos (nombres vinculados exactamente a Firestore)
+  // 1. Documentos Vehiculares y Mecánicos
   const docsVehiculo = [
     {
       nombre: 'Permiso de Circulación',
@@ -236,22 +233,22 @@ export default function IdentificacionConductor({
     {
       nombre: 'Programa / Pauta de Mantención',
       url: vehiculo?.urlPauta,
-      fecha: null
+      fecha: vehiculo?.vencimientoPauta || null
     }
   ];
 
-  // 2. Documentación Preventiva, de Seguridad y Faena (nombres vinculados exactamente a Firestore)
+  // 2. Documentación Preventiva, de Seguridad y Faena
   const docsSeguridadFaena = [
-    { nombre: 'Mapa de Riesgos de Conducción', url: vehiculo?.urlMapaRiesgos },
-    { nombre: 'MIPER de Conducción', url: vehiculo?.urlMiper },
-    { nombre: 'Plan de Tránsito', url: vehiculo?.urlPlanTransito },
-    { nombre: 'Plan de Emergencia', url: vehiculo?.urlPlanEmergencia },
-    { nombre: 'Procedimiento de Conducción', url: vehiculo?.urlProcedimientoConduccion },
-    { nombre: 'Gestión y Control Alcohol y Drogas', url: vehiculo?.urlAlcoholDrogas },
-    { nombre: 'Evidencia Eval. Procedimiento', url: vehiculo?.urlEvidenciaConduccion },
-    { nombre: 'Evidencia Eval. Plan Tránsito', url: vehiculo?.urlEvidenciaTransito },
-    { nombre: 'Evidencia Eval. Emergencia', url: vehiculo?.urlEvidenciaEmergencia },
-    { nombre: 'Reporte Control de Velocidad (GPS)', url: vehiculo?.urlReporteGPS }
+    { nombre: 'Mapa de Riesgos de Conducción', url: vehiculo?.urlMapaRiesgos, fecha: vehiculo?.vencimientoMapaRiesgos || null },
+    { nombre: 'MIPER de Conducción', url: vehiculo?.urlMiper, fecha: vehiculo?.vencimientoMiper || null },
+    { nombre: 'Procedimiento de Conducción', url: vehiculo?.urlProcedimientoConduccion, fecha: vehiculo?.vencimientoProcedimiento || null },
+    { nombre: 'Plan de Tránsito', url: vehiculo?.urlPlanTransito, fecha: vehiculo?.vencimientoPlanTransito || null },
+    { nombre: 'Plan de Emergencia', url: vehiculo?.urlPlanEmergencia, fecha: vehiculo?.vencimientoPlanEmergencia || null },
+    { nombre: 'Gestión y Control Alcohol y Drogas', url: vehiculo?.urlAlcoholDrogas, fecha: vehiculo?.vencimientoAlcoholDrogas || null },
+    { nombre: 'Evidencia Eval. Procedimiento', url: vehiculo?.urlEvidenciaConduccion, fecha: null },
+    { nombre: 'Evidencia Eval. Plan Tránsito', url: vehiculo?.urlEvidenciaTransito, fecha: null },
+    { nombre: 'Evidencia Eval. Emergencia', url: vehiculo?.urlEvidenciaEmergencia, fecha: null },
+    { nombre: 'Reporte Control de Velocidad (GPS)', url: vehiculo?.urlReporteGPS, fecha: null }
   ];
 
   return (
@@ -285,8 +282,8 @@ export default function IdentificacionConductor({
         {mostrarDocsVehiculo && (
           <div className="space-y-2 mt-3 pt-3 border-t border-slate-100">
             {docsVehiculo.map((docItem, idx) => {
-              const estado = calcularEstadoVencimiento && docItem.fecha ? calcularEstadoVencimiento(docItem.fecha) : null;
               const tieneArchivo = Boolean(docItem.url);
+              const estado = calcularEstadoVencimiento && docItem.fecha ? calcularEstadoVencimiento(docItem.fecha) : null;
 
               return (
                 <div key={idx} className="flex justify-between items-center bg-slate-50/90 p-2.5 rounded-xl border border-slate-200/60">
@@ -298,8 +295,14 @@ export default function IdentificacionConductor({
                       </span>
                     ) : docItem.fecha ? (
                       <span className="text-[10px] text-slate-500 mt-0.5">Vence: {docItem.fecha}</span>
+                    ) : tieneArchivo ? (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full mt-1 border w-fit bg-green-100 text-green-700 border-green-200">
+                        Disponible
+                      </span>
                     ) : (
-                      <span className="text-[10px] text-slate-400 mt-0.5">Sin caducidad / No registrada</span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full mt-1 border w-fit bg-slate-100 text-slate-400 border-slate-200">
+                        No disponible
+                      </span>
                     )}
                   </div>
 
@@ -350,10 +353,28 @@ export default function IdentificacionConductor({
           <div className="space-y-2 mt-3 pt-3 border-t border-slate-100 max-h-60 overflow-y-auto pr-1">
             {docsSeguridadFaena.map((docItem, idx) => {
               const tieneArchivo = Boolean(docItem.url);
+              const estado = calcularEstadoVencimiento && docItem.fecha ? calcularEstadoVencimiento(docItem.fecha) : null;
 
               return (
                 <div key={idx} className="flex justify-between items-center bg-slate-50/90 p-2.5 rounded-xl border border-slate-200/60">
-                  <span className="text-xs font-bold text-slate-800 truncate pr-2">{docItem.nombre}</span>
+                  <div className="flex flex-col max-w-[65%]">
+                    <span className="text-xs font-bold text-slate-800 truncate pr-2">{docItem.nombre}</span>
+                    {estado ? (
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full mt-1 border w-fit ${estado.clase}`}>
+                        {estado.texto}
+                      </span>
+                    ) : docItem.fecha ? (
+                      <span className="text-[10px] text-slate-500 mt-0.5">Vence: {docItem.fecha}</span>
+                    ) : tieneArchivo ? (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full mt-1 border w-fit bg-green-100 text-green-700 border-green-200">
+                        Disponible
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full mt-1 border w-fit bg-slate-100 text-slate-400 border-slate-200">
+                        No disponible
+                      </span>
+                    )}
+                  </div>
 
                   {tieneArchivo ? (
                     <button
