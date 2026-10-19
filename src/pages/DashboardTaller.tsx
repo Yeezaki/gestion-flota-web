@@ -14,6 +14,12 @@ export default function DashboardTaller() {
   const [vehiculoData, setVehiculoData] = useState<any>(null);
   const [proxMantenimiento, setProxMantenimiento] = useState<string>('');
   
+  // Parámetros de Faena / Seguridad en Taller
+  const [torqueRealizado, setTorqueRealizado] = useState(false);
+  const [valorTorque, setValorTorque] = useState('');
+  const [vencimientoTorque, setVencimientoTorque] = useState('');
+  const [sistemasSeguridadOperativos, setSistemasSeguridadOperativos] = useState(true);
+
   const [perfilTaller, setPerfilTaller] = useState<any>(null);
 
   const [formCamioneta, setFormCamioneta] = useState({
@@ -94,6 +100,14 @@ export default function DashboardTaller() {
     setOtExistente(null);
     setVehiculoData(null);
     setProxMantenimiento('');
+    setTorqueRealizado(false);
+    setValorTorque('');
+    setSistemasSeguridadOperativos(true);
+
+    // Sugerencia de vigencia de torque (por defecto 3 meses / 90 días para faena)
+    const fechaHoy = new Date();
+    fechaHoy.setMonth(fechaHoy.getMonth() + 3);
+    setVencimientoTorque(fechaHoy.toISOString().split('T')[0]);
 
     try {
       const qVehiculo = query(collection(db, 'vehiculos'), where('patente', '==', cita.patente));
@@ -105,6 +119,10 @@ export default function DashboardTaller() {
         
         const kmActual = Number(vData.kilometrajeActual) || 0;
         setProxMantenimiento(String(kmActual + 10000));
+
+        if (vData.vencimientoTorque) {
+          setVencimientoTorque(vData.vencimientoTorque);
+        }
       }
 
       const qOT = query(collection(db, 'ordenes_trabajo'), where('idCita', '==', cita.id));
@@ -166,7 +184,6 @@ export default function DashboardTaller() {
 
     try {
       const nombreCreador = perfilTaller ? perfilTaller.nombreTaller : 'Taller Asociado';
-
       const correlativo = await obtenerSiguienteNumeroOT();
 
       await addDoc(collection(db, 'ordenes_trabajo'), {
@@ -176,6 +193,13 @@ export default function DashboardTaller() {
         patente: citaSeleccionada.patente,
         tipoVehiculo: vehiculoData.tipo,
         datos: datosOT,
+        // Certificaciones de Seguridad y Faena
+        certificacionTorque: {
+          realizado: torqueRealizado,
+          valor: valorTorque || 'Estándar Fabricante',
+          vencimiento: vencimientoTorque
+        },
+        sistemasSeguridadOperativos,
         fechaCreacion: serverTimestamp(),
         creadoPor: nombreCreador,
         tallerId: auth.currentUser?.uid || ''
@@ -186,15 +210,22 @@ export default function DashboardTaller() {
         numeroOT: correlativo.numeroStr
       });
 
+      // Actualizamos los datos del vehículo (próximo km y vigencia de torque)
+      const vehiculoUpdatePayload: any = {};
       if (proxMantenimiento) {
-        await updateDoc(doc(db, 'vehiculos', vehiculoData.id), {
-          kilometrajeTaller: proxMantenimiento
-        });
+        vehiculoUpdatePayload.kilometrajeTaller = proxMantenimiento;
+      }
+      if (torqueRealizado && vencimientoTorque) {
+        vehiculoUpdatePayload.vencimientoTorque = vencimientoTorque;
+      }
+
+      if (Object.keys(vehiculoUpdatePayload).length > 0) {
+        await updateDoc(doc(db, 'vehiculos', vehiculoData.id), vehiculoUpdatePayload);
       }
 
       await logAccion('CREAR_OT', `El taller ${nombreCreador} generó la ${correlativo.numeroStr} para el vehículo ${citaSeleccionada.patente}`);
 
-      alert(`Orden de Trabajo ${correlativo.numeroStr} guardada y cerrado el ingreso.`);
+      alert(`Orden de Trabajo ${correlativo.numeroStr} guardada exitosamente.`);
       seleccionarCita(citaSeleccionada);
       cargarCitasYPerfil();
     } catch (error) {
@@ -302,11 +333,17 @@ export default function DashboardTaller() {
                     <div className="p-4 bg-slate-50 rounded-xl text-slate-600 text-sm space-y-2">
                       <p>La <strong>{otExistente.numeroOT || 'Orden de Trabajo'}</strong> ya fue completada y registrada en el sistema de administración.</p>
                       <p className="text-xs text-slate-500">Creado por: {otExistente.creadoPor || 'Taller'}</p>
+                      {otExistente.certificacionTorque?.realizado && (
+                        <div className="mt-2 text-xs text-emerald-700 font-bold bg-emerald-50 p-2.5 rounded-lg border border-emerald-200">
+                          Torque verificado: {otExistente.certificacionTorque.valor} (Vence: {otExistente.certificacionTorque.vencimiento || 'No informada'})
+                        </div>
+                      )}
                     </div>
                   ) : !vehiculoData ? (
                     <p className="text-sm text-slate-500">Cargando datos del vehículo...</p>
                   ) : (
                     <>
+                      {/* Próximo Kilometraje y Mantenimiento */}
                       <div className="mb-6 bg-indigo-50 p-4 rounded-2xl border border-indigo-100">
                         <label className="block text-xs font-black text-indigo-800 uppercase tracking-widest mb-2">Programar Próximo Mantenimiento (KM)</label>
                         <div className="flex items-center gap-4">
@@ -314,38 +351,85 @@ export default function DashboardTaller() {
                             type="number" 
                             value={proxMantenimiento} 
                             onChange={(e) => setProxMantenimiento(e.target.value)} 
-                            className="p-3 border border-indigo-200 rounded-xl font-bold text-indigo-900 focus:outline-none w-48"
+                            className="p-3 border border-indigo-200 rounded-xl font-bold text-indigo-900 focus:outline-none w-48 text-sm"
                           />
                           <span className="text-sm text-indigo-600 font-medium">Calculado automáticamente a +10.000 km</span>
                         </div>
                       </div>
 
+                      {/* CERTIFICACIÓN DE TORQUE Y SISTEMAS DE SEGURIDAD (FAENA) */}
+                      <div className="mb-6 bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-4">
+                        <h3 className="text-xs font-black text-slate-700 uppercase tracking-wider">
+                          Protocolo de Torque y Sistemas de Seguridad (Faena)
+                        </h3>
+                        
+                        <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+                          <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
+                            <input 
+                              type="checkbox" 
+                              checked={torqueRealizado} 
+                              onChange={(e) => setTorqueRealizado(e.target.checked)} 
+                              className="w-4 h-4 text-blue-600 rounded"
+                            />
+                            Realicé verificación de apriete / torque de tuercas de ruedas
+                          </label>
+
+                          {torqueRealizado && (
+                            <div className="flex gap-2 w-full md:w-auto">
+                              <input 
+                                type="text" 
+                                placeholder="Valor (ej: 140 lb-ft)" 
+                                value={valorTorque} 
+                                onChange={(e) => setValorTorque(e.target.value)} 
+                                className="p-2 border border-slate-300 rounded-lg text-xs font-bold w-40"
+                              />
+                              <input 
+                                type="date" 
+                                value={vencimientoTorque} 
+                                onChange={(e) => setVencimientoTorque(e.target.value)} 
+                                className="p-2 border border-slate-300 rounded-lg text-xs font-bold"
+                              />
+                            </div>
+                          )}
+                        </div>
+
+                        <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer pt-2 border-t border-slate-200">
+                          <input 
+                            type="checkbox" 
+                            checked={sistemasSeguridadOperativos} 
+                            onChange={(e) => setSistemasSeguridadOperativos(e.target.checked)} 
+                            className="w-4 h-4 text-emerald-600 rounded"
+                          />
+                          Certifico operatividad de sistemas de seguridad (Frenos, Dirección, Suspensión y Luces)
+                        </label>
+                      </div>
+
                       {vehiculoData.tipo === 'Camioneta' ? (
                         <div className="space-y-4">
                           <div className="flex gap-4 mb-4">
-                            <label className="flex items-center gap-2"><input type="radio" name="tipoM" checked={formCamioneta.tipoMantenimiento === 'Preventivo'} onChange={() => setFormCamioneta({...formCamioneta, tipoMantenimiento: 'Preventivo'})} /> Preventivo</label>
-                            <label className="flex items-center gap-2"><input type="radio" name="tipoM" checked={formCamioneta.tipoMantenimiento === 'Correctivo'} onChange={() => setFormCamioneta({...formCamioneta, tipoMantenimiento: 'Correctivo'})} /> Correctivo</label>
+                            <label className="flex items-center gap-2 text-sm font-bold text-slate-700"><input type="radio" name="tipoM" checked={formCamioneta.tipoMantenimiento === 'Preventivo'} onChange={() => setFormCamioneta({...formCamioneta, tipoMantenimiento: 'Preventivo'})} /> Preventivo</label>
+                            <label className="flex items-center gap-2 text-sm font-bold text-slate-700"><input type="radio" name="tipoM" checked={formCamioneta.tipoMantenimiento === 'Correctivo'} onChange={() => setFormCamioneta({...formCamioneta, tipoMantenimiento: 'Correctivo'})} /> Correctivo</label>
                           </div>
                           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                             {['cambioAceiteGeneral', 'cambioAceiteMotor', 'cambioAceiteTransmision', 'cambioFiltro', 'suspension', 'frenos', 'embrague', 'cajaCambios'].map((item) => (
-                              <label key={item} className="flex items-center gap-2 text-sm text-slate-700 p-2 bg-slate-50 rounded border border-slate-100">
+                              <label key={item} className="flex items-center gap-2 text-xs font-medium text-slate-700 p-2 bg-slate-50 rounded border border-slate-100">
                                 <input type="checkbox" checked={(formCamioneta as any)[item]} onChange={(e) => setFormCamioneta({...formCamioneta, [item]: e.target.checked})} />
                                 {item.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
                               </label>
                             ))}
                           </div>
-                          <textarea placeholder="Descripción del trabajo realizado..." value={formCamioneta.descripcionTrabajo} onChange={e => setFormCamioneta({...formCamioneta, descripcionTrabajo: e.target.value})} className="w-full p-3 border border-slate-200 rounded-xl text-sm mt-4"></textarea>
-                          <textarea placeholder="Observaciones adicionales..." value={formCamioneta.observaciones} onChange={e => setFormCamioneta({...formCamioneta, observaciones: e.target.value})} className="w-full p-3 border border-slate-200 rounded-xl text-sm"></textarea>
+                          <textarea placeholder="Descripción del trabajo realizado..." value={formCamioneta.descripcionTrabajo} onChange={e => setFormCamioneta({...formCamioneta, descripcionTrabajo: e.target.value})} className="w-full p-3 border border-slate-200 rounded-xl text-xs mt-4"></textarea>
+                          <textarea placeholder="Observaciones adicionales..." value={formCamioneta.observaciones} onChange={e => setFormCamioneta({...formCamioneta, observaciones: e.target.value})} className="w-full p-3 border border-slate-200 rounded-xl text-xs"></textarea>
                         </div>
                       ) : (
                         <div className="space-y-6">
                            <div className="grid grid-cols-2 gap-4">
-                            <input type="text" placeholder="Empresa/Técnico" value={formPesado.empresaTecnico} onChange={e => setFormPesado({...formPesado, empresaTecnico: e.target.value})} className="p-3 border border-slate-200 rounded-xl text-sm" />
-                            <input type="number" placeholder="Horas de Parada" value={formPesado.horasParada} onChange={e => setFormPesado({...formPesado, horasParada: e.target.value})} className="p-3 border border-slate-200 rounded-xl text-sm" />
+                            <input type="text" placeholder="Empresa/Técnico" value={formPesado.empresaTecnico} onChange={e => setFormPesado({...formPesado, empresaTecnico: e.target.value})} className="p-3 border border-slate-200 rounded-xl text-xs" />
+                            <input type="number" placeholder="Horas de Parada" value={formPesado.horasParada} onChange={e => setFormPesado({...formPesado, horasParada: e.target.value})} className="p-3 border border-slate-200 rounded-xl text-xs" />
                           </div>
                           
                           <div>
-                            <h3 className="text-sm font-bold text-slate-700 mb-2">Descripción de Tareas</h3>
+                            <h3 className="text-xs font-bold text-slate-700 mb-2">Descripción de Tareas</h3>
                             {formPesado.tareas.map((tarea, idx) => (
                               <div key={idx} className="flex gap-2 mb-2">
                                 <input type="text" placeholder="Tarea" value={tarea.descripcion} onChange={e => { const n = [...formPesado.tareas]; n[idx].descripcion = e.target.value; setFormPesado({...formPesado, tareas: n}); }} className="flex-1 p-2 border rounded text-xs" />
@@ -358,7 +442,7 @@ export default function DashboardTaller() {
                           </div>
 
                           <div>
-                            <h3 className="text-sm font-bold text-slate-700 mb-2">Repuestos / Consumibles</h3>
+                            <h3 className="text-xs font-bold text-slate-700 mb-2">Repuestos / Consumibles</h3>
                             {formPesado.repuestos.map((rep, idx) => (
                               <div key={idx} className="flex gap-2 mb-2">
                                 <input type="number" placeholder="Cant." value={rep.cant} onChange={e => { const n = [...formPesado.repuestos]; n[idx].cant = e.target.value; setFormPesado({...formPesado, repuestos: n}); }} className="w-20 p-2 border rounded text-xs" />
@@ -368,11 +452,11 @@ export default function DashboardTaller() {
                             ))}
                             <button onClick={agregarFilaRepuesto} className="text-xs font-bold text-blue-600 hover:underline">+ Agregar Repuesto</button>
                           </div>
-                          <textarea placeholder="Observaciones..." value={formPesado.observaciones} onChange={e => setFormPesado({...formPesado, observaciones: e.target.value})} className="w-full p-3 border border-slate-200 rounded-xl text-sm"></textarea>
+                          <textarea placeholder="Observaciones..." value={formPesado.observaciones} onChange={e => setFormPesado({...formPesado, observaciones: e.target.value})} className="w-full p-3 border border-slate-200 rounded-xl text-xs"></textarea>
                         </div>
                       )}
 
-                      <button onClick={guardarOT} disabled={guardando} className="mt-6 w-full bg-slate-800 text-white font-bold py-4 rounded-xl hover:bg-slate-900 transition-all">
+                      <button onClick={guardarOT} disabled={guardando} className="mt-6 w-full bg-slate-800 text-white font-bold py-4 rounded-xl hover:bg-slate-900 transition-all text-sm shadow-md">
                         {guardando ? 'Generando correlativo y guardando OT...' : 'Generar y Cerrar OT'}
                       </button>
                     </>

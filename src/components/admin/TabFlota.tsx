@@ -13,6 +13,7 @@ type FormEditState = {
   ownerId: string;
   kilometrajeActual: string;
   kilometrajeTaller: string;
+  // Documentos Vehiculares
   vencimientoRevision: string;
   vencimientoCirculacion: string;
   vencimientoCertificado: string;
@@ -22,6 +23,15 @@ type FormEditState = {
   urlCertificado: string;
   urlSoap: string;
   urlPauta: string;
+  // Seguridad Operacional y Faena
+  vencimientoTorque: string;
+  urlCertificadoTorque: string;
+  urlMapaRiesgos: string;
+  urlMiper: string;
+  urlPlanTransito: string;
+  urlPlanEmergencia: string;
+  urlProcedimientoConduccion: string;
+  urlAlcoholDrogas: string;
 };
 
 type TabFlotaProps = {
@@ -35,19 +45,33 @@ export default function TabFlota({ busqueda, filtroTipoVehiculo }: TabFlotaProps
   const [limiteVehiculos, setLimiteVehiculos] = useState(10);
 
   const [vehiculoEditando, setVehiculoEditando] = useState<any | null>(null);
+  const [pestanaModal, setPestanaModal] = useState<'vehiculo' | 'faena'>('vehiculo');
   const [guardandoEdicion, setGuardandoEdicion] = useState(false);
+
   const [formEdit, setFormEdit] = useState<FormEditState>({
     patente: '', tipo: '', marca: '', modelo: '', anio: '', ownerId: '',
     kilometrajeActual: '', kilometrajeTaller: '',
     vencimientoRevision: '', vencimientoCirculacion: '', vencimientoCertificado: '', vencimientoSoap: '',
-    urlRevision: '', urlCirculacion: '', urlCertificado: '', urlSoap: '', urlPauta: ''
+    urlRevision: '', urlCirculacion: '', urlCertificado: '', urlSoap: '', urlPauta: '',
+    vencimientoTorque: '', urlCertificadoTorque: '', urlMapaRiesgos: '', urlMiper: '',
+    urlPlanTransito: '', urlPlanEmergencia: '', urlProcedimientoConduccion: '', urlAlcoholDrogas: ''
   });
   
+  // Archivos PDF Vehiculares
   const [pdfRevisionEdit, setPdfRevisionEdit] = useState<File | null>(null);
   const [pdfCirculacionEdit, setPdfCirculacionEdit] = useState<File | null>(null);
   const [pdfCertificadoEdit, setPdfCertificadoEdit] = useState<File | null>(null);
   const [pdfSoapEdit, setPdfSoapEdit] = useState<File | null>(null);
   const [pdfPautaEdit, setPdfPautaEdit] = useState<File | null>(null);
+
+  // Archivos PDF Seguridad y Faena
+  const [pdfTorqueEdit, setPdfTorqueEdit] = useState<File | null>(null);
+  const [pdfMapaRiesgosEdit, setPdfMapaRiesgosEdit] = useState<File | null>(null);
+  const [pdfMiperEdit, setPdfMiperEdit] = useState<File | null>(null);
+  const [pdfPlanTransitoEdit, setPdfPlanTransitoEdit] = useState<File | null>(null);
+  const [pdfPlanEmergenciaEdit, setPdfPlanEmergenciaEdit] = useState<File | null>(null);
+  const [pdfProcedimientoEdit, setPdfProcedimientoEdit] = useState<File | null>(null);
+  const [pdfAlcoholDrogasEdit, setPdfAlcoholDrogasEdit] = useState<File | null>(null);
 
   const logAccion = async (accion: string, detalles: string) => {
     try {
@@ -107,11 +131,22 @@ export default function TabFlota({ busqueda, filtroTipoVehiculo }: TabFlotaProps
 
   const editarVehiculoEnFormulario = (vehiculo: any) => {
     setVehiculoEditando(vehiculo);
+    setPestanaModal('vehiculo');
+    
     setPdfRevisionEdit(null);
     setPdfCirculacionEdit(null);
     setPdfCertificadoEdit(null);
     setPdfSoapEdit(null);
     setPdfPautaEdit(null);
+
+    setPdfTorqueEdit(null);
+    setPdfMapaRiesgosEdit(null);
+    setPdfMiperEdit(null);
+    setPdfPlanTransitoEdit(null);
+    setPdfPlanEmergenciaEdit(null);
+    setPdfProcedimientoEdit(null);
+    setPdfAlcoholDrogasEdit(null);
+
     setFormEdit({
       patente: vehiculo.patente,
       tipo: vehiculo.tipo || 'Camioneta',
@@ -129,41 +164,41 @@ export default function TabFlota({ busqueda, filtroTipoVehiculo }: TabFlotaProps
       urlCirculacion: vehiculo.urlCirculacion || '',
       urlCertificado: vehiculo.urlCertificado || '',
       urlSoap: vehiculo.urlSoap || '',
-      urlPauta: vehiculo.urlPauta || ''
+      urlPauta: vehiculo.urlPauta || '',
+      vencimientoTorque: vehiculo.vencimientoTorque || '',
+      urlCertificadoTorque: vehiculo.urlCertificadoTorque || '',
+      urlMapaRiesgos: vehiculo.urlMapaRiesgos || '',
+      urlMiper: vehiculo.urlMiper || '',
+      urlPlanTransito: vehiculo.urlPlanTransito || '',
+      urlPlanEmergencia: vehiculo.urlPlanEmergencia || '',
+      urlProcedimientoConduccion: vehiculo.urlProcedimientoConduccion || '',
+      urlAlcoholDrogas: vehiculo.urlAlcoholDrogas || ''
     });
   };
 
-  const eliminarDocumentoVehiculo = async (tipoDoc: 'revision' | 'circulacion' | 'certificado' | 'soap' | 'pauta') => {
+  const eliminarDocumentoVehiculo = async (urlKey: keyof FormEditState, storageName: string, label: string) => {
     if (!vehiculoEditando) return;
 
-    const mapeo: Record<'revision' | 'circulacion' | 'certificado' | 'soap' | 'pauta', { urlKey: keyof FormEditState; storage: string; label: string }> = {
-      revision: { urlKey: 'urlRevision', storage: 'documentos/' + formEdit.patente.trim().toUpperCase() + '/revision.pdf', label: 'Rev. Técnica' },
-      circulacion: { urlKey: 'urlCirculacion', storage: 'documentos/' + formEdit.patente.trim().toUpperCase() + '/circulacion.pdf', label: 'Permiso Circulación' },
-      certificado: { urlKey: 'urlCertificado', storage: 'documentos/' + formEdit.patente.trim().toUpperCase() + '/certificado.pdf', label: 'Certificado Mantención' },
-      soap: { urlKey: 'urlSoap', storage: 'documentos/' + formEdit.patente.trim().toUpperCase() + '/soap.pdf', label: 'SOAP' },
-      pauta: { urlKey: 'urlPauta', storage: 'documentos/' + formEdit.patente.trim().toUpperCase() + '/pauta.pdf', label: 'Pauta de Mantención' }
-    };
-
-    const docInfo = mapeo[tipoDoc];
-    const urlActual = formEdit[docInfo.urlKey];
+    const urlActual = formEdit[urlKey];
     if (!urlActual) {
       alert('No existe un documento asociado para eliminar.');
       return;
     }
 
     try {
-      const storageRef = ref(storage, docInfo.storage);
+      const storagePath = `documentos/${formEdit.patente.trim().toUpperCase()}/${storageName}.pdf`;
+      const storageRef = ref(storage, storagePath);
       await deleteObject(storageRef).catch(() => undefined);
 
-      const payload: Record<string, string> = { [docInfo.urlKey]: '' };
+      const payload: Record<string, string> = { [urlKey]: '' };
       await updateDoc(doc(db, 'vehiculos', vehiculoEditando.id), payload);
 
-      const nuevoFormEdit = { ...formEdit, [docInfo.urlKey]: '' } as FormEditState;
+      const nuevoFormEdit = { ...formEdit, [urlKey]: '' };
       setFormEdit(nuevoFormEdit);
-      setVehiculoEditando({ ...vehiculoEditando, [docInfo.urlKey]: '' });
-      setVehiculos(prev => prev.map(v => v.id === vehiculoEditando.id ? { ...v, [docInfo.urlKey]: '' } : v));
+      setVehiculoEditando({ ...vehiculoEditando, [urlKey]: '' });
+      setVehiculos(prev => prev.map(v => v.id === vehiculoEditando.id ? { ...v, [urlKey]: '' } : v));
 
-      alert(`${docInfo.label} eliminado correctamente.`);
+      alert(`${label} eliminado correctamente.`);
     } catch (error) {
       console.error(error);
       alert('Hubo un error al eliminar el documento.');
@@ -180,11 +215,20 @@ export default function TabFlota({ busqueda, filtroTipoVehiculo }: TabFlotaProps
       const updatePayload: any = { ...formEdit, patente: patenteMayuscula };
 
       const archivos = [
+        // Vehicular
         { file: pdfRevisionEdit, tipo: 'revision', urlKey: 'urlRevision' },
         { file: pdfCirculacionEdit, tipo: 'circulacion', urlKey: 'urlCirculacion' },
         { file: pdfCertificadoEdit, tipo: 'certificado', urlKey: 'urlCertificado' },
         { file: pdfSoapEdit, tipo: 'soap', urlKey: 'urlSoap' },
-        { file: pdfPautaEdit, tipo: 'pauta', urlKey: 'urlPauta' }
+        { file: pdfPautaEdit, tipo: 'pauta', urlKey: 'urlPauta' },
+        // Seguridad y Faena
+        { file: pdfTorqueEdit, tipo: 'torque', urlKey: 'urlCertificadoTorque' },
+        { file: pdfMapaRiesgosEdit, tipo: 'mapa_riesgos', urlKey: 'urlMapaRiesgos' },
+        { file: pdfMiperEdit, tipo: 'miper', urlKey: 'urlMiper' },
+        { file: pdfPlanTransitoEdit, tipo: 'plan_transito', urlKey: 'urlPlanTransito' },
+        { file: pdfPlanEmergenciaEdit, tipo: 'plan_emergencia', urlKey: 'urlPlanEmergencia' },
+        { file: pdfProcedimientoEdit, tipo: 'procedimiento_conduccion', urlKey: 'urlProcedimientoConduccion' },
+        { file: pdfAlcoholDrogasEdit, tipo: 'alcohol_drogas', urlKey: 'urlAlcoholDrogas' }
       ];
 
       for (const item of archivos) {
@@ -198,12 +242,8 @@ export default function TabFlota({ busqueda, filtroTipoVehiculo }: TabFlotaProps
       await updateDoc(doc(db, 'vehiculos', vehiculoEditando.id), updatePayload);
       setVehiculos(prev => prev.map(v => v.id === vehiculoEditando.id ? { ...v, ...updatePayload } : v));
       setVehiculoEditando(null);
-      setPdfRevisionEdit(null);
-      setPdfCirculacionEdit(null);
-      setPdfCertificadoEdit(null);
-      setPdfSoapEdit(null);
-      setPdfPautaEdit(null);
-      alert("Vehículo actualizado correctamente.");
+
+      alert("Vehículo y documentos actualizados correctamente.");
     } catch (error) {
       console.error(error);
       alert("Error al actualizar");
@@ -514,146 +554,270 @@ export default function TabFlota({ busqueda, filtroTipoVehiculo }: TabFlotaProps
         </div>
       </div>
 
-      {/* MODAL DE EDICIÓN */}
+      {/* MODAL DE EDICIÓN CON 2 PESTAÑAS */}
       {vehiculoEditando && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
           <div className="bg-white rounded-3xl p-6 md:p-8 w-full max-w-3xl shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar border border-slate-100">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-6">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-4">
               <div>
                 <h3 className="text-2xl font-black text-slate-800">Editar Vehículo</h3>
-                <p className="text-sm text-slate-500 font-medium mt-1">Modifica los datos y documentos de la patente <span className="font-bold text-slate-700">{formEdit.patente}</span></p>
+                <p className="text-sm text-slate-500 font-medium mt-1">Patente: <span className="font-bold text-slate-700">{formEdit.patente}</span></p>
               </div>
               <button onClick={() => setVehiculoEditando(null)} className="text-slate-400 hover:text-slate-800 font-bold text-xl transition-colors bg-slate-100 hover:bg-slate-200 w-10 h-10 rounded-full flex items-center justify-center">✕</button>
             </div>
 
             <form onSubmit={guardarEdicionVehiculo} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {/* DATOS BÁSICOS DEL VEHÍCULO */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-black text-slate-400 uppercase mb-2 ml-1">Tipo</label>
-                  <select value={formEdit.tipo} onChange={(e) => setFormEdit({ ...formEdit, tipo: e.target.value })} className="w-full p-3.5 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-slate-700 focus:border-blue-500 focus:outline-none transition-all">
+                  <label className="block text-xs font-black text-slate-400 uppercase mb-1 ml-1">Tipo</label>
+                  <select value={formEdit.tipo} onChange={(e) => setFormEdit({ ...formEdit, tipo: e.target.value })} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 focus:border-blue-500 focus:outline-none text-sm">
                     <option>Camioneta</option>
                     <option>Tracto camión</option>
                     <option>Semirremolque</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-black text-slate-400 uppercase mb-2 ml-1">Patente</label>
-                  <input type="text" value={formEdit.patente} onChange={(e) => setFormEdit({ ...formEdit, patente: e.target.value })} className="w-full p-3.5 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-slate-700 focus:border-blue-500 focus:outline-none transition-all" />
+                  <label className="block text-xs font-black text-slate-400 uppercase mb-1 ml-1">Patente</label>
+                  <input type="text" value={formEdit.patente} onChange={(e) => setFormEdit({ ...formEdit, patente: e.target.value })} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 focus:border-blue-500 focus:outline-none text-sm uppercase" />
                 </div>
                 <div>
-                  <label className="block text-xs font-black text-slate-400 uppercase mb-2 ml-1">Marca</label>
-                  <input type="text" value={formEdit.marca} onChange={(e) => setFormEdit({ ...formEdit, marca: e.target.value })} className="w-full p-3.5 bg-slate-50 border-2 border-slate-100 rounded-2xl font-medium text-slate-700 focus:border-blue-500 focus:outline-none transition-all" />
+                  <label className="block text-xs font-black text-slate-400 uppercase mb-1 ml-1">Marca</label>
+                  <input type="text" value={formEdit.marca} onChange={(e) => setFormEdit({ ...formEdit, marca: e.target.value })} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 focus:border-blue-500 focus:outline-none text-sm font-medium" />
                 </div>
                 <div>
-                  <label className="block text-xs font-black text-slate-400 uppercase mb-2 ml-1">Modelo</label>
-                  <input type="text" value={formEdit.modelo} onChange={(e) => setFormEdit({ ...formEdit, modelo: e.target.value })} className="w-full p-3.5 bg-slate-50 border-2 border-slate-100 rounded-2xl font-medium text-slate-700 focus:border-blue-500 focus:outline-none transition-all" />
+                  <label className="block text-xs font-black text-slate-400 uppercase mb-1 ml-1">Modelo</label>
+                  <input type="text" value={formEdit.modelo} onChange={(e) => setFormEdit({ ...formEdit, modelo: e.target.value })} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 focus:border-blue-500 focus:outline-none text-sm font-medium" />
                 </div>
                 <div>
-                  <label className="block text-xs font-black text-slate-400 uppercase mb-2 ml-1">Año</label>
-                  <input type="text" value={formEdit.anio} onChange={(e) => setFormEdit({ ...formEdit, anio: e.target.value })} className="w-full p-3.5 bg-slate-50 border-2 border-slate-100 rounded-2xl font-medium text-slate-700 focus:border-blue-500 focus:outline-none transition-all" />
+                  <label className="block text-xs font-black text-slate-400 uppercase mb-1 ml-1">Año</label>
+                  <input type="text" value={formEdit.anio} onChange={(e) => setFormEdit({ ...formEdit, anio: e.target.value })} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 focus:border-blue-500 focus:outline-none text-sm font-medium" />
                 </div>
                 <div>
-                  <label className="block text-xs font-black text-slate-400 uppercase mb-2 ml-1">Responsable (OwnerId)</label>
-                  <input type="text" value={formEdit.ownerId} onChange={(e) => setFormEdit({ ...formEdit, ownerId: e.target.value })} className="w-full p-3.5 bg-slate-50 border-2 border-slate-100 rounded-2xl font-medium text-slate-700 focus:border-blue-500 focus:outline-none transition-all" />
+                  <label className="block text-xs font-black text-slate-400 uppercase mb-1 ml-1">Responsable (OwnerId / Empresa)</label>
+                  <input type="text" value={formEdit.ownerId} onChange={(e) => setFormEdit({ ...formEdit, ownerId: e.target.value })} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 focus:border-blue-500 focus:outline-none text-sm font-medium" />
                 </div>
                 <div>
-                  <label className="block text-xs font-black text-slate-400 uppercase mb-2 ml-1">Km Actual</label>
-                  <input type="text" value={formEdit.kilometrajeActual} onChange={(e) => setFormEdit({ ...formEdit, kilometrajeActual: e.target.value })} className="w-full p-3.5 bg-slate-50 border-2 border-slate-100 rounded-2xl font-medium text-slate-700 focus:border-blue-500 focus:outline-none transition-all" />
+                  <label className="block text-xs font-black text-slate-400 uppercase mb-1 ml-1">Km Actual</label>
+                  <input type="text" value={formEdit.kilometrajeActual} onChange={(e) => setFormEdit({ ...formEdit, kilometrajeActual: e.target.value })} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 focus:border-blue-500 focus:outline-none text-sm font-medium" />
                 </div>
                 <div>
-                  <label className="block text-xs font-black text-slate-400 uppercase mb-2 ml-1">Próx Taller</label>
-                  <input type="text" value={formEdit.kilometrajeTaller} onChange={(e) => setFormEdit({ ...formEdit, kilometrajeTaller: e.target.value })} className="w-full p-3.5 bg-slate-50 border-2 border-slate-100 rounded-2xl font-medium text-slate-700 focus:border-blue-500 focus:outline-none transition-all" />
+                  <label className="block text-xs font-black text-slate-400 uppercase mb-1 ml-1">Próx. Mantenimiento Taller (KM)</label>
+                  <input type="text" value={formEdit.kilometrajeTaller} onChange={(e) => setFormEdit({ ...formEdit, kilometrajeTaller: e.target.value })} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 focus:border-blue-500 focus:outline-none text-sm font-medium" />
                 </div>
               </div>
 
-              {/* Fechas de Documentos y Cargas */}
+              {/* SELECTOR DE PESTAÑAS DE DOCUMENTOS */}
               <div className="pt-4 border-t border-slate-100">
-                <h4 className="text-sm font-bold text-slate-800 mb-4">Fechas de Vencimiento y Documentos</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  {/* Rev. Técnica */}
-                  <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
-                    <label className="block text-[11px] font-black text-slate-500 uppercase mb-3">Rev. Técnica</label>
-                    <input type="date" value={formEdit.vencimientoRevision} onChange={(e) => setFormEdit({ ...formEdit, vencimientoRevision: e.target.value })} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl mb-3 text-sm font-medium text-slate-700 focus:border-blue-500 focus:outline-none" />
-                    {formEdit.urlRevision ? (
-                      <div className="flex items-center justify-between bg-blue-50 border border-blue-100 p-2.5 rounded-xl mb-3">
-                        <a href={formEdit.urlRevision} target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-600 hover:underline">Ver Doc. Actual</a>
-                        <button type="button" onClick={() => eliminarDocumentoVehiculo('revision')} className="text-[10px] font-bold px-2.5 py-1 rounded bg-red-50 text-red-600 hover:bg-red-100 transition-colors">Eliminar</button>
-                      </div>
-                    ) : (
-                      <div className="text-[10px] text-slate-400 mb-3 font-medium italic">Sin documento guardado</div>
-                    )}
-                    <label className="block text-[10px] font-bold text-slate-500 mb-1">Subir / Actualizar PDF:</label>
-                    <input type="file" accept="application/pdf" onChange={(e) => setPdfRevisionEdit(e.target.files?.[0] ?? null)} className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer" />
-                  </div>
-
-                  {/* Permiso Circulación */}
-                  <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
-                    <label className="block text-[11px] font-black text-slate-500 uppercase mb-3">Permiso Circulación</label>
-                    <input type="date" value={formEdit.vencimientoCirculacion} onChange={(e) => setFormEdit({ ...formEdit, vencimientoCirculacion: e.target.value })} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl mb-3 text-sm font-medium text-slate-700 focus:border-blue-500 focus:outline-none" />
-                    {formEdit.urlCirculacion ? (
-                      <div className="flex items-center justify-between bg-blue-50 border border-blue-100 p-2.5 rounded-xl mb-3">
-                        <a href={formEdit.urlCirculacion} target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-600 hover:underline">Ver Doc. Actual</a>
-                        <button type="button" onClick={() => eliminarDocumentoVehiculo('circulacion')} className="text-[10px] font-bold px-2.5 py-1 rounded bg-red-50 text-red-600 hover:bg-red-100 transition-colors">Eliminar</button>
-                      </div>
-                    ) : (
-                      <div className="text-[10px] text-slate-400 mb-3 font-medium italic">Sin documento guardado</div>
-                    )}
-                    <label className="block text-[10px] font-bold text-slate-500 mb-1">Subir / Actualizar PDF:</label>
-                    <input type="file" accept="application/pdf" onChange={(e) => setPdfCirculacionEdit(e.target.files?.[0] ?? null)} className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer" />
-                  </div>
-
-                  {/* Certificado Mantención */}
-                  <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
-                    <label className="block text-[11px] font-black text-slate-500 uppercase mb-3">Certificado Mantención</label>
-                    <input type="date" value={formEdit.vencimientoCertificado} onChange={(e) => setFormEdit({ ...formEdit, vencimientoCertificado: e.target.value })} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl mb-3 text-sm font-medium text-slate-700 focus:border-blue-500 focus:outline-none" />
-                    {formEdit.urlCertificado ? (
-                      <div className="flex items-center justify-between bg-blue-50 border border-blue-100 p-2.5 rounded-xl mb-3">
-                        <a href={formEdit.urlCertificado} target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-600 hover:underline">Ver Doc. Actual</a>
-                        <button type="button" onClick={() => eliminarDocumentoVehiculo('certificado')} className="text-[10px] font-bold px-2.5 py-1 rounded bg-red-50 text-red-600 hover:bg-red-100 transition-colors">Eliminar</button>
-                      </div>
-                    ) : (
-                      <div className="text-[10px] text-slate-400 mb-3 font-medium italic">Sin documento guardado</div>
-                    )}
-                    <label className="block text-[10px] font-bold text-slate-500 mb-1">Subir / Actualizar PDF:</label>
-                    <input type="file" accept="application/pdf" onChange={(e) => setPdfCertificadoEdit(e.target.files?.[0] ?? null)} className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer" />
-                  </div>
-
-                  {/* SOAP */}
-                  <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
-                    <label className="block text-[11px] font-black text-slate-500 uppercase mb-3">SOAP</label>
-                    <input type="date" value={formEdit.vencimientoSoap} onChange={(e) => setFormEdit({ ...formEdit, vencimientoSoap: e.target.value })} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl mb-3 text-sm font-medium text-slate-700 focus:border-blue-500 focus:outline-none" />
-                    {formEdit.urlSoap ? (
-                      <div className="flex items-center justify-between bg-blue-50 border border-blue-100 p-2.5 rounded-xl mb-3">
-                        <a href={formEdit.urlSoap} target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-600 hover:underline">Ver Doc. Actual</a>
-                        <button type="button" onClick={() => eliminarDocumentoVehiculo('soap')} className="text-[10px] font-bold px-2.5 py-1 rounded bg-red-50 text-red-600 hover:bg-red-100 transition-colors">Eliminar</button>
-                      </div>
-                    ) : (
-                      <div className="text-[10px] text-slate-400 mb-3 font-medium italic">Sin documento guardado</div>
-                    )}
-                    <label className="block text-[10px] font-bold text-slate-500 mb-1">Subir / Actualizar PDF:</label>
-                    <input type="file" accept="application/pdf" onChange={(e) => setPdfSoapEdit(e.target.files?.[0] ?? null)} className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer" />
-                  </div>
-
-                  {/* Pauta de Mantención */}
-                  <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm md:col-span-2">
-                    <label className="block text-[11px] font-black text-slate-500 uppercase mb-3">Pauta de Mantención (PDF)</label>
-                    {formEdit.urlPauta ? (
-                      <div className="flex items-center justify-between bg-blue-50 border border-blue-100 p-2.5 rounded-xl mb-3">
-                        <a href={formEdit.urlPauta} target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-600 hover:underline">Ver Pauta Actual</a>
-                        <button type="button" onClick={() => eliminarDocumentoVehiculo('pauta')} className="text-[10px] font-bold px-2.5 py-1 rounded bg-red-50 text-red-600 hover:bg-red-100 transition-colors">Eliminar</button>
-                      </div>
-                    ) : (
-                      <div className="text-[10px] text-slate-400 mb-3 font-medium italic">Sin pauta guardada</div>
-                    )}
-                    <label className="block text-[10px] font-bold text-slate-500 mb-1">Subir / Reemplazar PDF:</label>
-                    <input type="file" accept="application/pdf" onChange={(e) => setPdfPautaEdit(e.target.files?.[0] ?? null)} className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer" />
-                  </div>
+                <div className="flex gap-2 mb-4 bg-slate-100 p-1.5 rounded-2xl w-fit">
+                  <button
+                    type="button"
+                    onClick={() => setPestanaModal('vehiculo')}
+                    className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${
+                      pestanaModal === 'vehiculo' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    1. Documentos del Vehículo (5)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPestanaModal('faena')}
+                    className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${
+                      pestanaModal === 'faena' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    2. Seguridad Operacional y Faena (7)
+                  </button>
                 </div>
+
+                {/* PESTAÑA 1: VEHÍCULO */}
+                {pestanaModal === 'vehiculo' && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Rev. Técnica */}
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                      <label className="block text-xs font-black text-slate-600 uppercase mb-2">Revisión Técnica</label>
+                      <input type="date" value={formEdit.vencimientoRevision} onChange={(e) => setFormEdit({ ...formEdit, vencimientoRevision: e.target.value })} className="w-full p-2.5 bg-white border border-slate-200 rounded-xl mb-3 text-xs font-medium focus:border-blue-500 focus:outline-none" />
+                      {formEdit.urlRevision ? (
+                        <div className="flex items-center justify-between bg-white border border-slate-200 p-2 rounded-xl mb-2">
+                          <a href={formEdit.urlRevision} target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-600 hover:underline">Ver Actual</a>
+                          <button type="button" onClick={() => eliminarDocumentoVehiculo('urlRevision', 'revision', 'Rev. Técnica')} className="text-[10px] font-bold text-red-600 hover:underline">Eliminar</button>
+                        </div>
+                      ) : (
+                        <div className="text-[10px] text-slate-400 mb-2 italic">Sin archivo adjunto</div>
+                      )}
+                      <input type="file" accept="application/pdf" onChange={(e) => setPdfRevisionEdit(e.target.files?.[0] ?? null)} className="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[11px] file:font-bold file:bg-white file:text-slate-700 hover:file:bg-slate-100" />
+                    </div>
+
+                    {/* Permiso Circulación */}
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                      <label className="block text-xs font-black text-slate-600 uppercase mb-2">Permiso de Circulación</label>
+                      <input type="date" value={formEdit.vencimientoCirculacion} onChange={(e) => setFormEdit({ ...formEdit, vencimientoCirculacion: e.target.value })} className="w-full p-2.5 bg-white border border-slate-200 rounded-xl mb-3 text-xs font-medium focus:border-blue-500 focus:outline-none" />
+                      {formEdit.urlCirculacion ? (
+                        <div className="flex items-center justify-between bg-white border border-slate-200 p-2 rounded-xl mb-2">
+                          <a href={formEdit.urlCirculacion} target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-600 hover:underline">Ver Actual</a>
+                          <button type="button" onClick={() => eliminarDocumentoVehiculo('urlCirculacion', 'circulacion', 'Permiso Circulación')} className="text-[10px] font-bold text-red-600 hover:underline">Eliminar</button>
+                        </div>
+                      ) : (
+                        <div className="text-[10px] text-slate-400 mb-2 italic">Sin archivo adjunto</div>
+                      )}
+                      <input type="file" accept="application/pdf" onChange={(e) => setPdfCirculacionEdit(e.target.files?.[0] ?? null)} className="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[11px] file:font-bold file:bg-white file:text-slate-700 hover:file:bg-slate-100" />
+                    </div>
+
+                    {/* Certificado Mantención */}
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                      <label className="block text-xs font-black text-slate-600 uppercase mb-2">Certificado de Mantención</label>
+                      <input type="date" value={formEdit.vencimientoCertificado} onChange={(e) => setFormEdit({ ...formEdit, vencimientoCertificado: e.target.value })} className="w-full p-2.5 bg-white border border-slate-200 rounded-xl mb-3 text-xs font-medium focus:border-blue-500 focus:outline-none" />
+                      {formEdit.urlCertificado ? (
+                        <div className="flex items-center justify-between bg-white border border-slate-200 p-2 rounded-xl mb-2">
+                          <a href={formEdit.urlCertificado} target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-600 hover:underline">Ver Actual</a>
+                          <button type="button" onClick={() => eliminarDocumentoVehiculo('urlCertificado', 'certificado', 'Certificado Mantención')} className="text-[10px] font-bold text-red-600 hover:underline">Eliminar</button>
+                        </div>
+                      ) : (
+                        <div className="text-[10px] text-slate-400 mb-2 italic">Sin archivo adjunto</div>
+                      )}
+                      <input type="file" accept="application/pdf" onChange={(e) => setPdfCertificadoEdit(e.target.files?.[0] ?? null)} className="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[11px] file:font-bold file:bg-white file:text-slate-700 hover:file:bg-slate-100" />
+                    </div>
+
+                    {/* SOAP */}
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                      <label className="block text-xs font-black text-slate-600 uppercase mb-2">SOAP</label>
+                      <input type="date" value={formEdit.vencimientoSoap} onChange={(e) => setFormEdit({ ...formEdit, vencimientoSoap: e.target.value })} className="w-full p-2.5 bg-white border border-slate-200 rounded-xl mb-3 text-xs font-medium focus:border-blue-500 focus:outline-none" />
+                      {formEdit.urlSoap ? (
+                        <div className="flex items-center justify-between bg-white border border-slate-200 p-2 rounded-xl mb-2">
+                          <a href={formEdit.urlSoap} target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-600 hover:underline">Ver Actual</a>
+                          <button type="button" onClick={() => eliminarDocumentoVehiculo('urlSoap', 'soap', 'SOAP')} className="text-[10px] font-bold text-red-600 hover:underline">Eliminar</button>
+                        </div>
+                      ) : (
+                        <div className="text-[10px] text-slate-400 mb-2 italic">Sin archivo adjunto</div>
+                      )}
+                      <input type="file" accept="application/pdf" onChange={(e) => setPdfSoapEdit(e.target.files?.[0] ?? null)} className="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[11px] file:font-bold file:bg-white file:text-slate-700 hover:file:bg-slate-100" />
+                    </div>
+
+                    {/* Pauta Mantención */}
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 md:col-span-2">
+                      <label className="block text-xs font-black text-slate-600 uppercase mb-2">Pauta de Mantención (PDF)</label>
+                      {formEdit.urlPauta ? (
+                        <div className="flex items-center justify-between bg-white border border-slate-200 p-2 rounded-xl mb-2">
+                          <a href={formEdit.urlPauta} target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-600 hover:underline">Ver Pauta Actual</a>
+                          <button type="button" onClick={() => eliminarDocumentoVehiculo('urlPauta', 'pauta', 'Pauta Mantención')} className="text-[10px] font-bold text-red-600 hover:underline">Eliminar</button>
+                        </div>
+                      ) : (
+                        <div className="text-[10px] text-slate-400 mb-2 italic">Sin archivo adjunto</div>
+                      )}
+                      <input type="file" accept="application/pdf" onChange={(e) => setPdfPautaEdit(e.target.files?.[0] ?? null)} className="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[11px] file:font-bold file:bg-white file:text-slate-700 hover:file:bg-slate-100" />
+                    </div>
+                  </div>
+                )}
+
+                {/* PESTAÑA 2: SEGURIDAD Y FAENA */}
+                {pestanaModal === 'faena' && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Certificado de Torque */}
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                      <label className="block text-xs font-black text-slate-600 uppercase mb-2">Certificado de Torque Vigente</label>
+                      <input type="date" value={formEdit.vencimientoTorque} onChange={(e) => setFormEdit({ ...formEdit, vencimientoTorque: e.target.value })} className="w-full p-2.5 bg-white border border-slate-200 rounded-xl mb-3 text-xs font-medium focus:border-blue-500 focus:outline-none" />
+                      {formEdit.urlCertificadoTorque ? (
+                        <div className="flex items-center justify-between bg-white border border-slate-200 p-2 rounded-xl mb-2">
+                          <a href={formEdit.urlCertificadoTorque} target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-600 hover:underline">Ver Actual</a>
+                          <button type="button" onClick={() => eliminarDocumentoVehiculo('urlCertificadoTorque', 'torque', 'Certificado Torque')} className="text-[10px] font-bold text-red-600 hover:underline">Eliminar</button>
+                        </div>
+                      ) : (
+                        <div className="text-[10px] text-slate-400 mb-2 italic">Sin archivo adjunto</div>
+                      )}
+                      <input type="file" accept="application/pdf" onChange={(e) => setPdfTorqueEdit(e.target.files?.[0] ?? null)} className="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[11px] file:font-bold file:bg-white file:text-slate-700 hover:file:bg-slate-100" />
+                    </div>
+
+                    {/* Mapa de Riesgos */}
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                      <label className="block text-xs font-black text-slate-600 uppercase mb-2">Mapa de Riesgos de Conducción</label>
+                      {formEdit.urlMapaRiesgos ? (
+                        <div className="flex items-center justify-between bg-white border border-slate-200 p-2 rounded-xl mb-2 mt-8">
+                          <a href={formEdit.urlMapaRiesgos} target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-600 hover:underline">Ver Actual</a>
+                          <button type="button" onClick={() => eliminarDocumentoVehiculo('urlMapaRiesgos', 'mapa_riesgos', 'Mapa de Riesgos')} className="text-[10px] font-bold text-red-600 hover:underline">Eliminar</button>
+                        </div>
+                      ) : (
+                        <div className="text-[10px] text-slate-400 mb-2 mt-8 italic">Sin archivo adjunto</div>
+                      )}
+                      <input type="file" accept="application/pdf" onChange={(e) => setPdfMapaRiesgosEdit(e.target.files?.[0] ?? null)} className="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[11px] file:font-bold file:bg-white file:text-slate-700 hover:file:bg-slate-100" />
+                    </div>
+
+                    {/* MIPER de Conducción */}
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                      <label className="block text-xs font-black text-slate-600 uppercase mb-2">MIPER de Conducción</label>
+                      {formEdit.urlMiper ? (
+                        <div className="flex items-center justify-between bg-white border border-slate-200 p-2 rounded-xl mb-2 mt-8">
+                          <a href={formEdit.urlMiper} target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-600 hover:underline">Ver Actual</a>
+                          <button type="button" onClick={() => eliminarDocumentoVehiculo('urlMiper', 'miper', 'MIPER')} className="text-[10px] font-bold text-red-600 hover:underline">Eliminar</button>
+                        </div>
+                      ) : (
+                        <div className="text-[10px] text-slate-400 mb-2 mt-8 italic">Sin archivo adjunto</div>
+                      )}
+                      <input type="file" accept="application/pdf" onChange={(e) => setPdfMiperEdit(e.target.files?.[0] ?? null)} className="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[11px] file:font-bold file:bg-white file:text-slate-700 hover:file:bg-slate-100" />
+                    </div>
+
+                    {/* Plan de Tránsito */}
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                      <label className="block text-xs font-black text-slate-600 uppercase mb-2">Plan de Tránsito</label>
+                      {formEdit.urlPlanTransito ? (
+                        <div className="flex items-center justify-between bg-white border border-slate-200 p-2 rounded-xl mb-2 mt-8">
+                          <a href={formEdit.urlPlanTransito} target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-600 hover:underline">Ver Actual</a>
+                          <button type="button" onClick={() => eliminarDocumentoVehiculo('urlPlanTransito', 'plan_transito', 'Plan de Tránsito')} className="text-[10px] font-bold text-red-600 hover:underline">Eliminar</button>
+                        </div>
+                      ) : (
+                        <div className="text-[10px] text-slate-400 mb-2 mt-8 italic">Sin archivo adjunto</div>
+                      )}
+                      <input type="file" accept="application/pdf" onChange={(e) => setPdfPlanTransitoEdit(e.target.files?.[0] ?? null)} className="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[11px] file:font-bold file:bg-white file:text-slate-700 hover:file:bg-slate-100" />
+                    </div>
+
+                    {/* Plan de Emergencia */}
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                      <label className="block text-xs font-black text-slate-600 uppercase mb-2">Plan de Emergencia</label>
+                      {formEdit.urlPlanEmergencia ? (
+                        <div className="flex items-center justify-between bg-white border border-slate-200 p-2 rounded-xl mb-2 mt-8">
+                          <a href={formEdit.urlPlanEmergencia} target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-600 hover:underline">Ver Actual</a>
+                          <button type="button" onClick={() => eliminarDocumentoVehiculo('urlPlanEmergencia', 'plan_emergencia', 'Plan de Emergencia')} className="text-[10px] font-bold text-red-600 hover:underline">Eliminar</button>
+                        </div>
+                      ) : (
+                        <div className="text-[10px] text-slate-400 mb-2 mt-8 italic">Sin archivo adjunto</div>
+                      )}
+                      <input type="file" accept="application/pdf" onChange={(e) => setPdfPlanEmergenciaEdit(e.target.files?.[0] ?? null)} className="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[11px] file:font-bold file:bg-white file:text-slate-700 hover:file:bg-slate-100" />
+                    </div>
+
+                    {/* Procedimiento de Conducción */}
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                      <label className="block text-xs font-black text-slate-600 uppercase mb-2">Procedimiento de Conducción</label>
+                      {formEdit.urlProcedimientoConduccion ? (
+                        <div className="flex items-center justify-between bg-white border border-slate-200 p-2 rounded-xl mb-2 mt-8">
+                          <a href={formEdit.urlProcedimientoConduccion} target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-600 hover:underline">Ver Actual</a>
+                          <button type="button" onClick={() => eliminarDocumentoVehiculo('urlProcedimientoConduccion', 'procedimiento_conduccion', 'Procedimiento Conducción')} className="text-[10px] font-bold text-red-600 hover:underline">Eliminar</button>
+                        </div>
+                      ) : (
+                        <div className="text-[10px] text-slate-400 mb-2 mt-8 italic">Sin archivo adjunto</div>
+                      )}
+                      <input type="file" accept="application/pdf" onChange={(e) => setPdfProcedimientoEdit(e.target.files?.[0] ?? null)} className="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[11px] file:font-bold file:bg-white file:text-slate-700 hover:file:bg-slate-100" />
+                    </div>
+
+                    {/* Control Alcohol y Drogas */}
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 md:col-span-2">
+                      <label className="block text-xs font-black text-slate-600 uppercase mb-2">Gestión y Control de Alcohol y Drogas</label>
+                      {formEdit.urlAlcoholDrogas ? (
+                        <div className="flex items-center justify-between bg-white border border-slate-200 p-2 rounded-xl mb-2">
+                          <a href={formEdit.urlAlcoholDrogas} target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-600 hover:underline">Ver Actual</a>
+                          <button type="button" onClick={() => eliminarDocumentoVehiculo('urlAlcoholDrogas', 'alcohol_drogas', 'Control Alcohol y Drogas')} className="text-[10px] font-bold text-red-600 hover:underline">Eliminar</button>
+                        </div>
+                      ) : (
+                        <div className="text-[10px] text-slate-400 mb-2 italic">Sin archivo adjunto</div>
+                      )}
+                      <input type="file" accept="application/pdf" onChange={(e) => setPdfAlcoholDrogasEdit(e.target.files?.[0] ?? null)} className="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[11px] file:font-bold file:bg-white file:text-slate-700 hover:file:bg-slate-100" />
+                    </div>
+                  </div>
+                )}
               </div>
 
+              {/* ACCIONES MODAL */}
               <div className="flex gap-4 justify-end pt-6 border-t border-slate-100">
-                <button type="button" onClick={() => setVehiculoEditando(null)} className="bg-slate-100 text-slate-600 font-bold px-6 py-3.5 rounded-xl hover:bg-slate-200 transition-colors">Cancelar</button>
-                <button type="submit" disabled={guardandoEdicion} className="bg-blue-600 text-white font-bold px-6 py-3.5 rounded-xl hover:bg-blue-700 transition-colors disabled:bg-slate-400 shadow-md">
+                <button type="button" onClick={() => setVehiculoEditando(null)} className="bg-slate-100 text-slate-600 font-bold px-6 py-3 rounded-xl hover:bg-slate-200 transition-colors text-sm">Cancelar</button>
+                <button type="submit" disabled={guardandoEdicion} className="bg-blue-600 text-white font-bold px-6 py-3 rounded-xl hover:bg-blue-700 transition-colors disabled:bg-slate-400 shadow-md text-sm">
                   {guardandoEdicion ? 'Guardando...' : 'Guardar Cambios'}
                 </button>
               </div>
