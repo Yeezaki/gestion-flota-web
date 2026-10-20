@@ -43,7 +43,9 @@ export default function TabUsuarios() {
   }, []);
 
   const limpiarFormUsuario = () => {
-    setFormUsuario({ email: '', password: '', rol: 'admin', nombreTaller: '', direccionTaller: '', ciudadTaller: '', especialidadTaller: 'Mecánica Integrada', limiteQR: 10, razonSocial: '', telefono: '', direccion: '' });
+    setFormUsuario({ 
+      email: '', password: '', rol: 'admin', nombreTaller: '', direccionTaller: '', ciudadTaller: '', especialidadTaller: 'Mecánica Integrada', limiteQR: 10, razonSocial: '', telefono: '', direccion: '' 
+    });
     setEditandoUsuarioId(null);
   };
 
@@ -79,7 +81,7 @@ export default function TabUsuarios() {
           setCreandoUsuario(false);
           return;
         }
-        // Usar app secundaria para no desloguear al admin actual
+        
         const secondaryApp = initializeApp(firebaseConfig, "Secondary");
         const secondaryAuth = getAuth(secondaryApp);
         const userCredential = await createUserWithEmailAndPassword(secondaryAuth, formUsuario.email, formUsuario.password);
@@ -106,11 +108,10 @@ export default function TabUsuarios() {
   };
 
   const editarUsuario = (user: any) => {
-    const rolActual = user.rol === 'taller' ? 'taller' : user.rol === 'generador_qr' ? 'generador_qr' : 'admin';
     setFormUsuario({
       email: user.email,
       password: '',
-      rol: rolActual,
+      rol: user.rol || 'admin',
       nombreTaller: user.nombreTaller || '',
       direccionTaller: user.direccionTaller || user.ubicacionTaller || '',
       ciudadTaller: user.ciudadTaller || '',
@@ -145,19 +146,21 @@ export default function TabUsuarios() {
         </div>
         <form onSubmit={guardarUsuario} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-600 mb-1">Correo Electronico</label>
+            <label className="block text-sm font-medium text-slate-600 mb-1">Correo Electrónico</label>
             <input type="email" required disabled={!!editandoUsuarioId} value={formUsuario.email} onChange={(e) => setFormUsuario({...formUsuario, email: e.target.value})} className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:bg-slate-100 disabled:text-slate-500" placeholder="usuario@empresa.com" />
           </div>
           {!editandoUsuarioId && (
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">Contrasena (Minimo 6 caracteres)</label>
+              <label className="block text-sm font-medium text-slate-600 mb-1">Contraseña (Mínimo 6 caracteres)</label>
               <input type="password" required minLength={6} value={formUsuario.password} onChange={(e) => setFormUsuario({...formUsuario, password: e.target.value})} className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="••••••••" />
             </div>
           )}
           <div>
             <label className="block text-sm font-medium text-slate-600 mb-1">Tipo de Rol</label>
-            <select value={formUsuario.rol} onChange={(e) => setFormUsuario({...formUsuario, rol: e.target.value})} className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none">
+            <select value={formUsuario.rol} onChange={(e) => setFormUsuario({...formUsuario, rol: e.target.value})} className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none font-bold text-slate-700">
               <option value="admin">Administrador General</option>
+              <option value="prevencion_riesgo">Prevención de Riesgos</option>
+              <option value="torre_control">Torre de Control</option>
               <option value="taller">Taller Externo Asociado</option>
               <option value="generador_qr">Generador de QRs (Restringido)</option>
             </select>
@@ -207,8 +210,21 @@ export default function TabUsuarios() {
                   <option value={50}>Plan Corporativo (50 QRs máximo)</option>
                 </select>
                 {editandoUsuarioId && (
-                  <p className="text-xs text-purple-600 mt-2 italic">* Al actualizar el plan no se reiniciará la cantidad de QRs ya creados por el usuario.</p>
+                  <p className="text-xs text-purple-600 mt-2 italic">Al actualizar el plan no se reiniciará la cantidad de QRs ya creados por el usuario.</p>
                 )}
+              </div>
+            </div>
+          )}
+
+          {(formUsuario.rol === 'prevencion_riesgo' || formUsuario.rol === 'torre_control') && (
+            <div className="space-y-4 p-4 bg-slate-50 rounded-xl border border-slate-200">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Nombre Completo del Operador</label>
+                <input type="text" required value={formUsuario.razonSocial} onChange={(e) => setFormUsuario({...formUsuario, razonSocial: e.target.value})} className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white" placeholder="Ej: Carlos Muñoz Valenzuela" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Teléfono Institucional</label>
+                <input type="text" value={formUsuario.telefono} onChange={(e) => setFormUsuario({...formUsuario, telefono: e.target.value})} className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white" placeholder="+56 9 8765 4321" />
               </div>
             </div>
           )}
@@ -225,7 +241,9 @@ export default function TabUsuarios() {
       </div>
 
       <div className="bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-100 xl:col-span-2">
-        <div className="p-6 bg-slate-50 border-b border-slate-100 flex justify-between items-center"><h2 className="text-xl font-bold text-slate-800">Cuentas Registradas</h2></div>
+        <div className="p-6 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
+          <h2 className="text-xl font-bold text-slate-800">Cuentas Registradas</h2>
+        </div>
 
         <div className="hidden md:block overflow-x-auto w-full">
           <table className="w-full text-left border-collapse">
@@ -237,16 +255,20 @@ export default function TabUsuarios() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {usuariosRegistrados.length === 0 ? (<tr><td colSpan={3} className="p-8 text-center text-slate-400">Cargando usuarios...</td></tr>) 
-              : usuariosRegistrados.map((user) => (
+              {usuariosRegistrados.length === 0 ? (
+                <tr><td colSpan={3} className="p-8 text-center text-slate-400">Cargando usuarios...</td></tr>
+              ) : usuariosRegistrados.map((user) => (
                 <tr key={user.id} className="hover:bg-slate-50">
                   <td className="p-4">
                     <span className="font-bold text-slate-800">{user.email}</span>
                     <span className={`text-[10px] block mt-1 uppercase font-bold px-2 py-0.5 rounded inline-block ${
                       user.rol === 'admin' ? 'bg-indigo-100 text-indigo-700' : 
-                      user.rol === 'taller' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
+                      user.rol === 'taller' ? 'bg-blue-100 text-blue-700' :
+                      user.rol === 'prevencion_riesgo' ? 'bg-amber-100 text-amber-800' :
+                      user.rol === 'torre_control' ? 'bg-cyan-100 text-cyan-800' :
+                      'bg-purple-100 text-purple-700'
                     }`}>
-                      {user.rol}
+                      {user.rol === 'prevencion_riesgo' ? 'Prevención' : user.rol === 'torre_control' ? 'Torre de Control' : user.rol}
                     </span>
                   </td>
                   <td className="p-4">
@@ -260,6 +282,16 @@ export default function TabUsuarios() {
                       <div className="text-sm">
                         <p className="font-black text-purple-700">{user.razonSocial || 'Empresa No Definida'}</p>
                         <p className="text-slate-500 font-medium text-xs">Plan: {user.limiteQR} QRs | Dir: {user.direccion || 'N/A'}</p>
+                        <p className="text-slate-500 font-medium text-xs">Tel: {user.telefono || 'N/A'}</p>
+                      </div>
+                    ) : user.rol === 'prevencion_riesgo' ? (
+                      <div className="text-sm">
+                        <p className="font-black text-amber-700">{user.razonSocial || 'Oficial de Prevención'}</p>
+                        <p className="text-slate-500 font-medium text-xs">Tel: {user.telefono || 'N/A'}</p>
+                      </div>
+                    ) : user.rol === 'torre_control' ? (
+                      <div className="text-sm">
+                        <p className="font-black text-cyan-700">{user.razonSocial || 'Operador Telemático'}</p>
                         <p className="text-slate-500 font-medium text-xs">Tel: {user.telefono || 'N/A'}</p>
                       </div>
                     ) : (
@@ -286,8 +318,13 @@ export default function TabUsuarios() {
                   <span className="font-black text-slate-800 text-sm break-all">{user.email}</span>
                   <span className={`text-[10px] uppercase font-black px-2 py-1 rounded-full inline-block ${
                     user.rol === 'admin' ? 'bg-indigo-100 text-indigo-700' : 
-                    user.rol === 'taller' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
-                  }`}>{user.rol}</span>
+                    user.rol === 'taller' ? 'bg-blue-100 text-blue-700' :
+                    user.rol === 'prevencion_riesgo' ? 'bg-amber-100 text-amber-800' :
+                    user.rol === 'torre_control' ? 'bg-cyan-100 text-cyan-800' :
+                    'bg-purple-100 text-purple-700'
+                  }`}>
+                    {user.rol === 'prevencion_riesgo' ? 'Prevención' : user.rol === 'torre_control' ? 'Torre de Control' : user.rol}
+                  </span>
                 </div>
 
                 <div className="mt-3 text-sm text-slate-600">
@@ -301,6 +338,16 @@ export default function TabUsuarios() {
                     <div>
                       <p className="font-black text-purple-700">{user.razonSocial || 'Empresa No Definida'}</p>
                       <p className="text-slate-500 font-medium text-xs">Plan: {user.limiteQR} QRs | Dir: {user.direccion || 'N/A'}</p>
+                      <p className="text-slate-500 font-medium text-xs">Tel: {user.telefono || 'N/A'}</p>
+                    </div>
+                  ) : user.rol === 'prevencion_riesgo' ? (
+                    <div>
+                      <p className="font-black text-amber-700">{user.razonSocial || 'Oficial de Prevención'}</p>
+                      <p className="text-slate-500 font-medium text-xs">Tel: {user.telefono || 'N/A'}</p>
+                    </div>
+                  ) : user.rol === 'torre_control' ? (
+                    <div>
+                      <p className="font-black text-cyan-700">{user.razonSocial || 'Operador Telemático'}</p>
                       <p className="text-slate-500 font-medium text-xs">Tel: {user.telefono || 'N/A'}</p>
                     </div>
                   ) : (

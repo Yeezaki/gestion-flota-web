@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
-import { collection, addDoc, updateDoc, doc, serverTimestamp, query, where, getDocs, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, serverTimestamp, query, where, getDocs, deleteDoc, orderBy, onSnapshot } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage } from '../lib/firebase';
 
@@ -11,48 +11,56 @@ import TestTrazoContinuo from '../components/conductor/TestTrazoContinuo';
 import TestMemoriaSecuencia from '../components/conductor/TestMemoriaSecuencia';
 import FormChecklist from '../components/conductor/FormChecklist';
 import ResumenConductor from '../components/conductor/ResumenConductor';
+import { ModalVisorDocumento } from '../components/conductor/ModalVisorDocumento';
+import { ChecklistEmergenciaConductor } from '../components/conductor/ChecklistEmergenciaConductor';
+import { SAFETY_DOCUMENTS } from '../constants';
+import type {
+  EvaluacionEmergenciaRegistro,
+  FirmaDocumento,
+  SafetyDocumentType
+} from '../constants';
 
 type TipoTestPVT = 'reaccion' | 'seguimiento' | 'trazo' | 'memoria';
 
-const preguntasPorTipo = {
+const preguntasBasePorTipo = {
   'Tracto camión': [
-    { id: 'presiones_tablero', texto: '¿Los indicadores de presion (aceite, aire/vacio) marcan niveles normales?' },
-    { id: 'frenos_servicio', texto: '¿El freno de pie y el de emergencia funcionan bien y sin fugas de aire?' },
-    { id: 'volante_direccion', texto: '¿El volante y la direccion operan correctamente sin juego excesivo?' },
-    { id: 'parabrisas_limpiadores', texto: '¿El parabrisas esta sin fisuras graves y los limpiaparabrisas funcionan?' },
-    { id: 'espejos_retrovisores', texto: '¿Los espejos retrovisores estan en buen estado y bien ajustados?' },
-    { id: 'luces_frontales', texto: '¿Faros principales, direccionales y luces de galibo frontales encienden?' },
-    { id: 'luces_traseras', texto: '¿Luces de freno, reversa y direccionales traseras operan sin problemas?' },
-    { id: 'neumaticos_tracto', texto: '¿Las llantas tienen buena huella, presion correcta y los birlos estan completos?' },
-    { id: 'suspension_chasis', texto: '¿La suspension (muelles) y el chasis se encuentran sin fisuras o roturas?' },
-    { id: 'tanque_combustible', texto: '¿El tanque de combustible y su tapon estan bien asegurados y sin fugas?' },
-    { id: 'quinta_rueda', texto: '¿La quinta rueda y sus conexiones de aire/electricas estan en buen estado?' },
-    { id: 'equipo_emergencia', texto: '¿Lleva extintor cargado, botiquin, triangulos, gato hidraulico y llave de rueda?' }
+    { id: 'presiones_tablero', texto: '¿Los indicadores de presion (aceite, aire/vacio) marcan niveles normales?', esCritica: true },
+    { id: 'frenos_servicio', texto: '¿El freno de pie y el de emergencia funcionan bien y sin fugas de aire?', esCritica: true },
+    { id: 'volante_direccion', texto: '¿El volante y la direccion operan correctamente sin juego excesivo?', esCritica: true },
+    { id: 'parabrisas_limpiadores', texto: '¿El parabrisas esta sin fisuras graves y los limpiaparabrisas funcionan?', esCritica: false },
+    { id: 'espejos_retrovisores', texto: '¿Los espejos retrovisores estan en buen estado y bien ajustados?', esCritica: false },
+    { id: 'luces_frontales', texto: '¿Faros principales, direccionales y luces de galibo frontales encienden?', esCritica: true },
+    { id: 'luces_traseras', texto: '¿Luces de freno, reversa y direccionales traseras operan sin problemas?', esCritica: true },
+    { id: 'neumaticos_tracto', texto: '¿Las llantas tienen buena huella, presion correcta y los birlos estan completos?', esCritica: true },
+    { id: 'suspension_chasis', texto: '¿La suspension (muelles) y el chasis se encuentran sin fisuras o roturas?', esCritica: true },
+    { id: 'tanque_combustible', texto: '¿El tanque de combustible y su tapon estan bien asegurados y sin fugas?', esCritica: true },
+    { id: 'quinta_rueda', texto: '¿La quinta rueda y sus conexiones de aire/electricas estan en buen estado?', esCritica: true },
+    { id: 'equipo_emergencia', texto: '¿Lleva extintor cargado, botiquin, triangulos, gato hidraulico y llave de rueda?', esCritica: true }
   ],
   'Semirremolque': [
-    { id: 'estado_carroceria', texto: '¿La carroceria se encuentra sin abolladuras, corrosion ni elementos sueltos?' },
-    { id: 'luces_remolque', texto: '¿Las luces de posicion, intermitentes, freno y galibo estan operativas?' },
-    { id: 'huincha_reflectante', texto: '¿La huincha reflectante en el chasis esta visible y en buen estado?' },
-    { id: 'neumaticos_remolque', texto: '¿Los neumaticos (incluido el de repuesto) estan sin danos y con presion correcta?' },
-    { id: 'patines_apoyo', texto: '¿Los patines de apoyo (patas) suben, bajan y se aseguran correctamente?' },
-    { id: 'conexiones_tracto', texto: '¿Las lineas electricas y conexiones de frenos de aire hacia el tracto estan sin fugas?' },
-    { id: 'extintores_pqs', texto: '¿Cuenta con 2 extintores de 6 kilos con mantencion vigente?' },
-    { id: 'cunas_seguridad', texto: '¿Lleva al menos 2 cunas en buen estado y conos de seguridad?' },
-    { id: 'rotulacion_carga', texto: '¿Los letreros de riesgo (Ej. ONU, Rombo) estan visibles en los 4 lados?' },
-    { id: 'valvulas_acoples', texto: '¿Las valvulas, acoples y piolas de accionamiento de emergencia estan operativas?' }
+    { id: 'estado_carroceria', texto: '¿La carroceria se encuentra sin abolladuras, corrosion ni elementos sueltos?', esCritica: false },
+    { id: 'luces_remolque', texto: '¿Las luces de posicion, intermitentes, freno y galibo estan operativas?', esCritica: true },
+    { id: 'huincha_reflectante', texto: '¿La huincha reflectante en el chasis esta visible y en buen estado?', esCritica: false },
+    { id: 'neumaticos_remolque', texto: '¿Los neumaticos (incluido el de repuesto) estan sin danos y con presion correcta?', esCritica: true },
+    { id: 'patines_apoyo', texto: '¿Los patines de apoyo (patas) suben, bajan y se aseguran correctamente?', esCritica: true },
+    { id: 'conexiones_tracto', texto: '¿Las lineas electricas y conexiones de frenos de aire hacia el tracto estan sin fugas?', esCritica: true },
+    { id: 'extintores_pqs', texto: '¿Cuenta con 2 extintores de 6 kilos con mantencion vigente?', esCritica: true },
+    { id: 'cunas_seguridad', texto: '¿Lleva al menos 2 cunas en buen estado y conos de seguridad?', esCritica: true },
+    { id: 'rotulacion_carga', texto: '¿Los letreros de riesgo (Ej. ONU, Rombo) estan visibles en los 4 lados?', esCritica: true },
+    { id: 'valvulas_acoples', texto: '¿Las valvulas, acoples y piolas de accionamiento de emergencia estan operativas?', esCritica: true }
   ],
   'Camioneta': [
-    { id: 'luces_altas_bajas', texto: '¿Las luces altas, bajas y de estacionamiento encienden correctamente?' },
-    { id: 'luces_freno_interm', texto: '¿Las luces de freno, retroceso e intermitentes estan operativas?' },
-    { id: 'alarmas_bocina', texto: '¿La alarma de retroceso y la bocina suenan de forma clara?' },
-    { id: 'parabrisas_visibilidad', texto: '¿El parabrisas esta limpio, sin trizaduras y los limpiaparabrisas limpian bien?' },
-    { id: 'espejos_camioneta', texto: '¿Los espejos laterales y el retrovisor interior estan ajustados y sin danos?' },
-    { id: 'cinturones_seguridad', texto: '¿Todos los cinturones de seguridad enganchan y retraen correctamente?' },
-    { id: 'neumaticos_camioneta', texto: '¿Los neumaticos (delanteros, traseros y repuesto) tienen buena huella y presion?' },
-    { id: 'frenos_camioneta', texto: '¿El pedal de freno y el freno de mano retienen el vehiculo adecuadamente?' },
-    { id: 'kit_emergencia_cam', texto: '¿Cuenta con extintor vigente, botiquin y triangulos reflectantes?' },
-    { id: 'herramientas_cam', texto: '¿Lleva gata hidraulica, llave de rueda y cunas de seguridad?' },
-    { id: 'carroceria_puertas', texto: '¿Las puertas cierran bien y la carroceria (con barra antivuelco si aplica) es segura?' }
+    { id: 'luces_altas_bajas', texto: '¿Las luces altas, bajas y de estacionamiento encienden correctamente?', esCritica: true },
+    { id: 'luces_freno_interm', texto: '¿Las luces de freno, retroceso e intermitentes estan operativas?', esCritica: true },
+    { id: 'alarmas_bocina', texto: '¿La alarma de retroceso y la bocina suenan de forma clara?', esCritica: false },
+    { id: 'parabrisas_visibilidad', texto: '¿El parabrisas esta limpio, sin trizaduras y los limpiaparabrisas limpian bien?', esCritica: false },
+    { id: 'espejos_camioneta', texto: '¿Los espejos laterales y el retrovisor interior estan ajustados y sin danos?', esCritica: false },
+    { id: 'cinturones_seguridad', texto: '¿Todos los cinturones de seguridad enganchan y retraen correctamente?', esCritica: true },
+    { id: 'neumaticos_camioneta', texto: '¿Los neumaticos (delanteros, traseros y repuesto) tienen buena huella y presion?', esCritica: true },
+    { id: 'frenos_camioneta', texto: '¿El pedal de freno y el freno de mano retienen el vehiculo adecuadamente?', esCritica: true },
+    { id: 'kit_emergencia_cam', texto: '¿Cuenta con extintor vigente, botiquin y triangulos reflectantes?', esCritica: true },
+    { id: 'herramientas_cam', texto: '¿Lleva gata hidraulica, llave de rueda y cunas de seguridad?', esCritica: true },
+    { id: 'carroceria_puertas', texto: '¿Las puertas cierran bien y la carroceria (con barra antivuelco si aplica) es segura?', esCritica: true }
   ]
 };
 
@@ -174,6 +182,27 @@ export default function VistaConductor() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [tieneFirma, setTieneFirma] = useState(false);
 
+  const [docSeleccionado, setDocSeleccionado] = useState<SafetyDocumentType | null>(null);
+  const [mostrarChecklistEmergencia, setMostrarChecklistEmergencia] = useState(false);
+
+  // Preguntas dinámicas de Prevención de Riesgos
+  const [preguntasPrevencionRemotas, setPreguntasPrevencionRemotas] = useState<any[]>([]);
+
+  useEffect(() => {
+    const qPrev = query(collection(db, 'preguntas_prevencion'), where('activa', '==', true), orderBy('creadoEn', 'asc'));
+    const unsub = onSnapshot(qPrev, (snap) => {
+      const preguntas = snap.docs.map(d => ({
+        id: `prev_${d.id}`,
+        texto: d.data().texto,
+        esCritica: d.data().esCritica ?? true,
+        origen: 'prevencion'
+      }));
+      setPreguntasPrevencionRemotas(preguntas);
+    }, (err) => console.error("Error cargando preguntas de prevención:", err));
+
+    return () => unsub();
+  }, []);
+
   useEffect(() => {
     if (!patenteValida) return;
     const datosCache = {
@@ -289,7 +318,10 @@ export default function VistaConductor() {
 
   let tipoActual = vehiculo?.tipo || 'Camioneta';
   if (tipoActual === 'Semi remolque') tipoActual = 'Semirremolque';
-  const preguntasDinamicas = preguntasPorTipo[tipoActual as keyof typeof preguntasPorTipo] || preguntasPorTipo['Camioneta'];
+  const preguntasVehiculoBase = preguntasBasePorTipo[tipoActual as keyof typeof preguntasBasePorTipo] || preguntasBasePorTipo['Camioneta'];
+
+  // Se combinan las preguntas de prevención al inicio seguidas por las del tipo de vehículo
+  const preguntasDinamicas = [...preguntasPrevencionRemotas, ...preguntasVehiculoBase];
 
   const capturarFotoTablero = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -331,9 +363,13 @@ export default function VistaConductor() {
     }
 
     setSubiendo(true);
+
+    // Detección de falla crítica según la configuración de la pregunta
     let tieneFallaCritica = false;
-    Object.values(respuestasChecklist).forEach((val) => {
-      if (val === 'no') tieneFallaCritica = true;
+    preguntasDinamicas.forEach((p) => {
+      if (respuestasChecklist[p.id] === 'no' && p.esCritica) {
+        tieneFallaCritica = true;
+      }
     });
 
     try {
@@ -528,6 +564,43 @@ export default function VistaConductor() {
     }
   };
 
+  const handleGuardarFirmaDocumento = async (registro: FirmaDocumento) => {
+    try {
+      await addDoc(collection(db, 'firmas_documentos'), {
+        ...registro,
+        patente: patenteValida,
+        creadoEn: serverTimestamp()
+      });
+      await registrarEnHistorial(
+        'FIRMA_DOCUMENTO_SEGURIDAD',
+        `Conductor ${nombreConductor} firmó y tomó conocimiento de: ${SAFETY_DOCUMENTS[registro.documentoId]?.titulo}`
+      );
+      alert(`Documento firmado con éxito: ${SAFETY_DOCUMENTS[registro.documentoId]?.titulo}`);
+    } catch (e) {
+      console.error(e);
+      alert('Error al guardar la firma en el servidor.');
+    }
+  };
+
+  const handleGuardarEvaluacionEmergencia = async (registro: EvaluacionEmergenciaRegistro) => {
+    try {
+      await addDoc(collection(db, 'evaluaciones_emergencia'), {
+        ...registro,
+        patente: patenteValida,
+        creadoEn: serverTimestamp()
+      });
+      await registrarEnHistorial(
+        'EVALUACION_EMERGENCIA',
+        `Conductor ${nombreConductor} completó el checklist de emergencia. Puntaje: ${registro.puntaje}/${registro.totalPreguntas} (${registro.aprobado ? 'Aprobado' : 'Rechazado'})`
+      );
+      alert('Evaluación de emergencia guardada con éxito.');
+      setMostrarChecklistEmergencia(false);
+    } catch (e) {
+      console.error(e);
+      alert('Error al guardar la evaluación de emergencia.');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-cover bg-center bg-fixed bg-no-repeat flex flex-col items-center justify-center p-4 md:p-6 relative" style={{ backgroundImage: "url('/fondo-conductor.jpg')" }}>
       {/* 1. Identificación y Descarga Inmediata de Documentos */}
@@ -562,7 +635,7 @@ export default function VistaConductor() {
         />
       )}
 
-      {/* 2. Pruebas Psicomotoras Aleatorias (Test 1 y Test 2) */}
+      {/* 2. Pruebas Psicomotoras Aleatorias */}
       {identificado && !fasePVTCompletada && !bloqueado && (
         <div className="w-full flex flex-col items-center">
           <div className="mb-3 text-[11px] font-black uppercase tracking-wider text-slate-700 bg-white/70 backdrop-blur-sm px-4 py-1.5 rounded-full shadow-sm">
@@ -572,7 +645,7 @@ export default function VistaConductor() {
         </div>
       )}
 
-      {/* 3. Tarjeta de Puntaje / Resultado de las Pruebas Psicomotoras */}
+      {/* 3. Tarjeta de Puntaje de Pruebas Psicomotoras */}
       {identificado && fasePVTCompletada && mostrarPantallaPuntajePVT && !bloqueado && (
         <div className="bg-white/70 backdrop-blur-md p-8 rounded-3xl shadow-2xl max-w-md w-full border border-white/60 animate-fade-in relative z-10 text-center">
           <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
@@ -615,7 +688,7 @@ export default function VistaConductor() {
           {motivoBloqueo === 'checklist' ? (
             <div className="mt-4 space-y-4">
               <p className="text-slate-700 text-sm font-medium">
-                Se detectaron una o más <strong>fallas críticas en el checklist de inspección</strong>. Por normativa de seguridad, este vehículo no puede iniciar ruta.
+                Se detectaron una o más <strong>fallas críticas en el checklist de inspección y prevención</strong>. Por normativa de seguridad, este vehículo no puede iniciar ruta.
               </p>
               <div className="bg-green-50 border border-green-200 text-green-800 p-3 rounded-2xl text-xs font-bold flex items-center justify-center gap-2">
                 <span>Evaluación psicomotora: Aprobada ({puntajeGlobalPVT}%)</span>
@@ -658,29 +731,90 @@ export default function VistaConductor() {
         </div>
       )}
 
-      {/* 6. Formulario de Checklist */}
+      {/* 6. Formulario de Checklist (con Preguntas de Prevención integradas) */}
       {identificado && fasePVTCompletada && !mostrarPantallaPuntajePVT && !encuestaCompletada && !bloqueado && (
-        <FormChecklist
-          idPatente={patenteValida}
-          nombreConductor={nombreConductor}
-          vehiculo={vehiculo}
-          cargandoVehiculo={cargandoVehiculo}
-          kilometraje={kilometraje}
-          setKilometraje={setKilometraje}
-          kilometrajeAnterior={kilometrajeAnterior}
-          fotoPreview={fotoPreview}
-          onCapturarFotoTablero={capturarFotoTablero}
-          preguntasDinamicas={preguntasDinamicas}
-          respuestasChecklist={respuestasChecklist}
-          onCambioRespuesta={(idQ, val) => setRespuestasChecklist((prev) => ({ ...prev, [idQ]: val }))}
-          canvasRef={canvasRef}
-          tieneFirma={tieneFirma}
-          setTieneFirma={setTieneFirma}
-          subiendo={subiendo}
-          onSubmit={manejarEnvioChecklist}
-          forzarDescarga={forzarDescarga}
-          calcularEstadoVencimiento={calcularEstadoVencimiento}
-        />
+        <div className="w-full max-w-2xl space-y-4">
+          <div className="bg-white/85 backdrop-blur-md rounded-2xl border border-white/60 p-5 shadow-xl space-y-4">
+            <div>
+              <h3 className="text-xs font-black uppercase tracking-wider text-slate-800">
+                Documentación y Seguridad de Operación
+              </h3>
+              <p className="text-[11px] text-slate-600 font-medium">
+                Consulte las 2 hojas de cada protocolo obligatorio y confirme mediante su firma digital.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                onClick={() => setDocSeleccionado('mapa_riesgo')}
+                className="p-3 rounded-xl border border-slate-200 bg-white hover:bg-blue-50/70 hover:border-blue-400 transition-all text-left shadow-sm flex flex-col justify-between"
+              >
+                <span className="text-xs font-bold text-slate-800">Mapa de riesgo de conducción</span>
+                <span className="text-[10px] text-blue-600 font-semibold mt-1">Ver 2 hojas y firmar</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDocSeleccionado('procedimiento_conduccion')}
+                className="p-3 rounded-xl border border-slate-200 bg-white hover:bg-blue-50/70 hover:border-blue-400 transition-all text-left shadow-sm flex flex-col justify-between"
+              >
+                <span className="text-xs font-bold text-slate-800">Procedimiento de conducción</span>
+                <span className="text-[10px] text-blue-600 font-semibold mt-1">Ver 2 hojas y firmar</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDocSeleccionado('plan_transito')}
+                className="p-3 rounded-xl border border-slate-200 bg-white hover:bg-blue-50/70 hover:border-blue-400 transition-all text-left shadow-sm flex flex-col justify-between"
+              >
+                <span className="text-xs font-bold text-slate-800">Plan de tránsito</span>
+                <span className="text-[10px] text-blue-600 font-semibold mt-1">Ver 2 hojas y firmar</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDocSeleccionado('plan_emergencia')}
+                className="p-3 rounded-xl border border-slate-200 bg-white hover:bg-blue-50/70 hover:border-blue-400 transition-all text-left shadow-sm flex flex-col justify-between"
+              >
+                <span className="text-xs font-bold text-slate-800">Plan de emergencia</span>
+                <span className="text-[10px] text-blue-600 font-semibold mt-1">Ver 2 hojas y firmar</span>
+              </button>
+            </div>
+
+            <div className="pt-2 border-t border-slate-200/60 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setMostrarChecklistEmergencia(true)}
+                className="px-4 py-2 text-xs font-bold text-white bg-slate-800 hover:bg-slate-900 rounded-xl shadow transition-colors"
+              >
+                Realizar Evaluación de Emergencia (Cuestionario)
+              </button>
+            </div>
+          </div>
+
+          <FormChecklist
+            idPatente={patenteValida}
+            nombreConductor={nombreConductor}
+            vehiculo={vehiculo}
+            cargandoVehiculo={cargandoVehiculo}
+            kilometraje={kilometraje}
+            setKilometraje={setKilometraje}
+            kilometrajeAnterior={kilometrajeAnterior}
+            fotoPreview={fotoPreview}
+            onCapturarFotoTablero={capturarFotoTablero}
+            preguntasDinamicas={preguntasDinamicas}
+            respuestasChecklist={respuestasChecklist}
+            onCambioRespuesta={(idQ, val) => setRespuestasChecklist((prev) => ({ ...prev, [idQ]: val }))}
+            canvasRef={canvasRef}
+            tieneFirma={tieneFirma}
+            setTieneFirma={setTieneFirma}
+            subiendo={subiendo}
+            onSubmit={manejarEnvioChecklist}
+            forzarDescarga={forzarDescarga}
+            calcularEstadoVencimiento={calcularEstadoVencimiento}
+          />
+        </div>
       )}
 
       {/* 7. Resumen de Jornada */}
@@ -716,6 +850,35 @@ export default function VistaConductor() {
           <button onClick={() => { sessionStorage.removeItem(storageKey); window.location.reload(); }} className="text-sm font-bold text-slate-600 hover:text-slate-900 transition-colors">
             Volver a escanear QR
           </button>
+        </div>
+      )}
+
+      {/* Modal de Lectura y Firma de Documentos */}
+      {docSeleccionado && (
+        <ModalVisorDocumento
+          documentoId={docSeleccionado}
+          conductorUid={rutConductor || patenteValida}
+          conductorNombre={nombreConductor || 'Conductor sin registrar'}
+          conductorRut={rutConductor || 'Sin RUT'}
+          isOpen={Boolean(docSeleccionado)}
+          onClose={() => setDocSeleccionado(null)}
+          onGuardarFirma={handleGuardarFirmaDocumento}
+        />
+      )}
+
+      {/* Modal de Checklist de Emergencia */}
+      {mostrarChecklistEmergencia && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-4 backdrop-blur-sm overflow-y-auto">
+          <div className="w-full max-w-2xl my-8">
+            <ChecklistEmergenciaConductor
+              conductorUid={rutConductor || patenteValida}
+              conductorNombre={nombreConductor || 'Conductor sin registrar'}
+              conductorRut={rutConductor || 'Sin RUT'}
+              cantidadPreguntas={3}
+              onGuardarEvaluacion={handleGuardarEvaluacionEmergencia}
+              onCerrar={() => setMostrarChecklistEmergencia(false)}
+            />
+          </div>
         </div>
       )}
     </div>

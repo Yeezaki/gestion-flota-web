@@ -1,10 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { db, auth } from '../lib/firebase';
 
-// Componentes modulares
 import TabReportes from '../components/admin/TabReportes';
 import TabFlota from '../components/admin/TabFlota';
 import TabQRs from '../components/admin/TabQRs';
@@ -13,11 +12,67 @@ import TabEstadisticas from '../components/admin/TabEstadisticas';
 import TabUsuarios from '../components/admin/TabUsuarios';
 import TabAuditoria from '../components/admin/TabAuditoria';
 
+import { TabAuditoriaSeguridad } from '../components/admin/TabAuditoriaSeguridad';
+import { FormAlcoholDrogas } from '../components/prevencion/FormAlcoholDrogas';
+import { FormEvidenciaProcedimiento } from '../components/prevencion/FormEvidenciaProcedimiento';
+import { ModuloTorreControl } from '../components/torreControl/ModuloTorreControl';
+
+import type {
+  FirmaDocumento,
+  RegistroAlcoholDrogas,
+  EvidenciaEvalProcedimiento,
+  EvaluacionEmergenciaRegistro,
+  ReporteVelocidadGPS
+} from '../constants';
+
 export default function DashboardAdmin() {
   const navigate = useNavigate();
   const [pestanaActiva, setPestanaActiva] = useState('reportes');
   const [busqueda, setBusqueda] = useState('');
   const [filtroTipoVehiculo, setFiltroTipoVehiculo] = useState('todos');
+
+  const [firmasDocumentos, setFirmasDocumentos] = useState<FirmaDocumento[]>([]);
+  const [registrosAlcohol, setRegistrosAlcohol] = useState<RegistroAlcoholDrogas[]>([]);
+  const [evidenciasProcedimiento, setEvidenciasProcedimiento] = useState<EvidenciaEvalProcedimiento[]>([]);
+  const [evaluacionesEmergencia, setEvaluacionesEmergencia] = useState<EvaluacionEmergenciaRegistro[]>([]);
+  const [reportesGPS, setReportesGPS] = useState<ReporteVelocidadGPS[]>([]);
+
+  const [subPestanaSeguridad, setSubPestanaSeguridad] = useState<'auditoria' | 'nuevo_alcohol' | 'nuevo_procedimiento' | 'nuevo_gps'>('auditoria');
+
+  useEffect(() => {
+    const qFirmas = query(collection(db, 'firmas_documentos'), orderBy('creadoEn', 'desc'));
+    const unsubFirmas = onSnapshot(qFirmas, (snap) => {
+      setFirmasDocumentos(snap.docs.map((d) => ({ id: d.id, ...d.data() } as FirmaDocumento)));
+    }, () => {});
+
+    const qAlcohol = query(collection(db, 'controles_alcohol_drogas'), orderBy('fechaControl', 'desc'));
+    const unsubAlcohol = onSnapshot(qAlcohol, (snap) => {
+      setRegistrosAlcohol(snap.docs.map((d) => ({ id: d.id, ...d.data() } as RegistroAlcoholDrogas)));
+    }, () => {});
+
+    const qProc = query(collection(db, 'evaluaciones_procedimiento'), orderBy('fechaEvaluacion', 'desc'));
+    const unsubProc = onSnapshot(qProc, (snap) => {
+      setEvidenciasProcedimiento(snap.docs.map((d) => ({ id: d.id, ...d.data() } as EvidenciaEvalProcedimiento)));
+    }, () => {});
+
+    const qEmerg = query(collection(db, 'evaluaciones_emergencia'), orderBy('creadoEn', 'desc'));
+    const unsubEmerg = onSnapshot(qEmerg, (snap) => {
+      setEvaluacionesEmergencia(snap.docs.map((d) => ({ id: d.id, ...d.data() } as EvaluacionEmergenciaRegistro)));
+    }, () => {});
+
+    const qGPS = query(collection(db, 'reportes_gps_velocidad'), orderBy('fechaRecorrido', 'desc'));
+    const unsubGPS = onSnapshot(qGPS, (snap) => {
+      setReportesGPS(snap.docs.map((d) => ({ id: d.id, ...d.data() } as ReporteVelocidadGPS)));
+    }, () => {});
+
+    return () => {
+      unsubFirmas();
+      unsubAlcohol();
+      unsubProc();
+      unsubEmerg();
+      unsubGPS();
+    };
+  }, []);
 
   const manejarCerrarSesion = async () => {
     try {
@@ -33,6 +88,33 @@ export default function DashboardAdmin() {
     }
     await signOut(auth);
     navigate('/login');
+  };
+
+  const handleGuardarAlcohol = async (nuevoRegistro: RegistroAlcoholDrogas) => {
+    const { id, ...datosSinId } = nuevoRegistro;
+    await addDoc(collection(db, 'controles_alcohol_drogas'), {
+      ...datosSinId,
+      creadoEn: serverTimestamp()
+    });
+    setSubPestanaSeguridad('auditoria');
+  };
+
+  const handleGuardarProcedimiento = async (nuevoRegistro: EvidenciaEvalProcedimiento) => {
+    const { id, ...datosSinId } = nuevoRegistro;
+    await addDoc(collection(db, 'evaluaciones_procedimiento'), {
+      ...datosSinId,
+      creadoEn: serverTimestamp()
+    });
+    setSubPestanaSeguridad('auditoria');
+  };
+
+  const handleGuardarReporteGPS = async (reporte: ReporteVelocidadGPS) => {
+    const { id, ...datosSinId } = reporte;
+    await addDoc(collection(db, 'reportes_gps_velocidad'), {
+      ...datosSinId,
+      creadoEn: serverTimestamp()
+    });
+    setSubPestanaSeguridad('auditoria');
   };
 
   return (
@@ -70,9 +152,9 @@ export default function DashboardAdmin() {
           <button onClick={() => setPestanaActiva('estadisticas')} className={`px-6 py-3 rounded-xl font-bold transition-all whitespace-nowrap ${pestanaActiva === 'estadisticas' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}>Estadísticas</button>
           <button onClick={() => setPestanaActiva('usuarios')} className={`px-6 py-3 rounded-xl font-bold transition-all whitespace-nowrap ${pestanaActiva === 'usuarios' ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}>Usuarios</button>
           <button onClick={() => setPestanaActiva('auditoria')} className={`px-6 py-3 rounded-xl font-bold transition-all whitespace-nowrap ${pestanaActiva === 'auditoria' ? 'bg-amber-500 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}>Auditoría</button>
+          <button onClick={() => setPestanaActiva('seguridad')} className={`px-6 py-3 rounded-xl font-bold transition-all whitespace-nowrap ${pestanaActiva === 'seguridad' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}>Seguridad y Torre de Control</button>
         </div>
 
-        {/* Carga de Componentes Modulares */}
         {pestanaActiva === 'reportes' && <TabReportes busqueda={busqueda} filtroTipoVehiculo={filtroTipoVehiculo} />}
         {pestanaActiva === 'vehiculos' && <TabFlota busqueda={busqueda} filtroTipoVehiculo={filtroTipoVehiculo} />}
         {pestanaActiva === 'qrs' && <TabQRs busqueda={busqueda} filtroTipoVehiculo={filtroTipoVehiculo} />}
@@ -80,6 +162,96 @@ export default function DashboardAdmin() {
         {pestanaActiva === 'estadisticas' && <TabEstadisticas />}
         {pestanaActiva === 'usuarios' && <TabUsuarios />}
         {pestanaActiva === 'auditoria' && <TabAuditoria />}
+
+        {pestanaActiva === 'seguridad' && (
+          <div className="space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+              <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">
+                Gestión Operativa de Prevención y Telemática
+              </span>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSubPestanaSeguridad('auditoria')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                    subPestanaSeguridad === 'auditoria'
+                      ? 'bg-slate-800 text-white'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  Panel de Auditoría
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSubPestanaSeguridad('nuevo_alcohol')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                    subPestanaSeguridad === 'nuevo_alcohol'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  + Cargar Control Alcohol/Drogas
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSubPestanaSeguridad('nuevo_procedimiento')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                    subPestanaSeguridad === 'nuevo_procedimiento'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  + Cargar Evidencia Procedimiento
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSubPestanaSeguridad('nuevo_gps')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                    subPestanaSeguridad === 'nuevo_gps'
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  + Cargar Archivo GPS (Torre Control)
+                </button>
+              </div>
+            </div>
+
+            {subPestanaSeguridad === 'auditoria' && (
+              <TabAuditoriaSeguridad
+                firmasDocumentos={firmasDocumentos}
+                registrosAlcohol={registrosAlcohol}
+                evidenciasProcedimiento={evidenciasProcedimiento}
+                evaluacionesEmergencia={evaluacionesEmergencia}
+                reportesGPS={reportesGPS}
+              />
+            )}
+
+            {subPestanaSeguridad === 'nuevo_alcohol' && (
+              <FormAlcoholDrogas
+                evaluadorUid={auth.currentUser?.uid || 'admin-uid'}
+                evaluadorNombre={auth.currentUser?.email || 'Administrador'}
+                onGuardar={handleGuardarAlcohol}
+              />
+            )}
+
+            {subPestanaSeguridad === 'nuevo_procedimiento' && (
+              <FormEvidenciaProcedimiento
+                evaluadorUid={auth.currentUser?.uid || 'admin-uid'}
+                evaluadorNombre={auth.currentUser?.email || 'Administrador'}
+                onGuardar={handleGuardarProcedimiento}
+              />
+            )}
+
+            {subPestanaSeguridad === 'nuevo_gps' && (
+              <ModuloTorreControl
+                usuarioUid={auth.currentUser?.uid || 'torre-uid'}
+                usuarioNombre={auth.currentUser?.email || 'Torre de Control'}
+                onGuardarReporte={handleGuardarReporteGPS}
+              />
+            )}
+          </div>
+        )}
 
       </div>
     </div>
