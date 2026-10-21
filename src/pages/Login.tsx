@@ -1,108 +1,108 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { doc, getDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
-import { LOGO_BASE64 } from '../constants';
-
-const ETIQUETA_PROYECTO = 'flota_app'; 
 
 export default function Login() {
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [cargando, setCargando] = useState(false);
-  const navigate = useNavigate();
 
   const manejarLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setCargando(true);
-    
+
     try {
-      // 1. Verificamos con Firebase Auth puro
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
       const user = userCredential.user;
 
+      let rol = 'admin';
       try {
-        // 2. Buscamos si tiene un perfil en la base de datos
-        const userDocRef = doc(db, 'usuarios', user.uid);
-        const userDocSnap = await getDoc(userDocRef);
-
-        if (userDocSnap.exists()) {
-          const data = userDocSnap.data();
-          
-          // Si tiene perfil, validamos que pertenezca a esta app
-          if (data.proyecto && data.proyecto !== ETIQUETA_PROYECTO) {
-            await signOut(auth);
-            setError('Acceso denegado: Esta cuenta pertenece a otra plataforma.');
-            setCargando(false);
-            return;
-          }
-
-          // Redirigimos según su rol en la BD
-          const rol = data.rol;
-          if (rol === 'taller') {
-            navigate('/taller');
-          } else if (rol === 'generador_qr') {
-            navigate('/panel-generador');
-          } else {
-            navigate('/admin');
-          }
-        } else {
-          navigate('/admin');
+        const userDoc = await getDoc(doc(db, 'usuarios', user.uid));
+        if (userDoc.exists()) {
+          rol = userDoc.data().rol || 'admin';
         }
-      } catch (firestoreErr) {
-        console.error(firestoreErr);
-        navigate('/admin');
+      } catch (err) {
+        console.error('Error al obtener rol del usuario:', err);
       }
+
+      await addDoc(collection(db, 'historial_acciones'), {
+        usuario: user.email || 'Desconocido',
+        accion: 'INICIO_SESION',
+        detalles: `Inicio de sesión exitoso con rol ${rol}`,
+        fecha: serverTimestamp()
+      });
+
+      if (rol === 'taller') navigate('/taller');
+      else if (rol === 'generador_qr') navigate('/panel-generador');
+      else if (rol === 'prevencion_riesgo') navigate('/prevencion');
+      else if (rol === 'torre_control') navigate('/torre-control');
+      else navigate('/admin');
+
     } catch (err: any) {
-      setError('Credenciales incorrectas. Verifica tu correo y contraseña.');
+      console.error(err);
+      setError('Credenciales inválidas o problema de conexión.');
     } finally {
       setCargando(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-      <div className="bg-white p-10 rounded-3xl shadow-2xl max-w-md w-full border border-slate-100">
-        <div className="text-center mb-8">
-          <img src={LOGO_BASE64} alt="Logo" className="h-16 object-contain mx-auto mb-6" />
-          <h1 className="text-2xl font-black text-slate-800">Acceso Restringido</h1>
-          <p className="text-slate-500 text-sm mt-2">Sistema de Gestión de Flota</p>
+    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 sm:p-6 lg:p-8 antialiased">
+      <div className="w-full max-w-md bg-white rounded-3xl p-6 sm:p-8 shadow-xl border border-slate-200/80 my-auto">
+        <div className="text-center mb-6">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 mb-3 font-black text-xl">
+            GF
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Acceso Portal</h1>
+          <p className="text-xs sm:text-sm text-slate-500 mt-1">Gestión de Flota, Prevención y Operaciones</p>
         </div>
-        
-        {error && <div className="bg-red-50 text-red-600 p-4 rounded-xl text-sm font-bold mb-6 border border-red-100 text-center">{error}</div>}
-        
-        <form onSubmit={manejarLogin} className="space-y-6">
+
+        {error && (
+          <div className="mb-5 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold text-center">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={manejarLogin} className="space-y-4">
           <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Correo Institucional</label>
-            <input 
-              type="email" 
-              required 
-              value={email} 
-              onChange={(e) => setEmail(e.target.value)} 
-              className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-xl focus:border-blue-500 focus:bg-white focus:outline-none transition-all font-medium" 
-              placeholder="correo@empresa.com" 
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+              Correo Electrónico
+            </label>
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="admin@empresa.cl"
+              className="w-full px-4 py-3 rounded-xl border border-slate-300 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50/50 hover:bg-white transition-all"
             />
           </div>
+
           <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Contraseña</label>
-            <input 
-              type="password" 
-              required 
-              value={password} 
-              onChange={(e) => setPassword(e.target.value)} 
-              className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-xl focus:border-blue-500 focus:bg-white focus:outline-none transition-all font-medium" 
-              placeholder="••••••••" 
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+              Contraseña
+            </label>
+            <input
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              className="w-full px-4 py-3 rounded-xl border border-slate-300 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50/50 hover:bg-white transition-all"
             />
           </div>
-          <button 
-            type="submit" 
-            disabled={cargando} 
-            className={`w-full font-bold py-4 rounded-xl transition-all shadow-md mt-4 ${cargando ? 'bg-slate-400 text-white cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+
+          <button
+            type="submit"
+            disabled={cargando}
+            className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white rounded-xl text-xs sm:text-sm font-bold shadow-md transition-all mt-2"
           >
-            {cargando ? 'Verificando...' : 'Iniciar Sesión'}
+            {cargando ? 'Autenticando...' : 'Iniciar Sesión'}
           </button>
         </form>
       </div>

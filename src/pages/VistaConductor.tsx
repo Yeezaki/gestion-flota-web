@@ -13,6 +13,12 @@ import FormChecklist from '../components/conductor/FormChecklist';
 import ResumenConductor from '../components/conductor/ResumenConductor';
 import { ModalVisorDocumento } from '../components/conductor/ModalVisorDocumento';
 import { ChecklistEmergenciaConductor } from '../components/conductor/ChecklistEmergenciaConductor';
+import { PantallaEsperaPVT } from '../components/conductor/PantallaEsperaPVT';
+import {
+  verificarBloqueoPVT,
+  registrarBloqueoPVT
+} from '../services/pvtLockService';
+
 import { SAFETY_DOCUMENTS } from '../constants';
 import type {
   EvaluacionEmergenciaRegistro,
@@ -92,6 +98,11 @@ export default function VistaConductor() {
   const [mostrarPantallaPuntajePVT, setMostrarPantallaPuntajePVT] = useState(false);
   const [datosTests, setDatosTests] = useState<any[]>([]);
   const [puntajeGlobalPVT, setPuntajeGlobalPVT] = useState<number>(100);
+
+  const [datosBloqueoPVT, setDatosBloqueoPVT] = useState<{
+    bloqueadoHasta: number;
+    nivelRiesgo: string;
+  } | null>(null);
 
   const [ubicacionGPS, setUbicacionGPS] = useState<any>(() => {
     const cache = sessionStorage.getItem(storageKey);
@@ -185,7 +196,6 @@ export default function VistaConductor() {
   const [docSeleccionado, setDocSeleccionado] = useState<SafetyDocumentType | null>(null);
   const [mostrarChecklistEmergencia, setMostrarChecklistEmergencia] = useState(false);
 
-  // Preguntas dinámicas de Prevención de Riesgos
   const [preguntasPrevencionRemotas, setPreguntasPrevencionRemotas] = useState<any[]>([]);
 
   useEffect(() => {
@@ -198,7 +208,7 @@ export default function VistaConductor() {
         origen: 'prevencion'
       }));
       setPreguntasPrevencionRemotas(preguntas);
-    }, (err) => console.error("Error cargando preguntas de prevención:", err));
+    }, (err) => console.error("Error cargando preguntas de prevencion:", err));
 
     return () => unsub();
   }, []);
@@ -320,7 +330,6 @@ export default function VistaConductor() {
   if (tipoActual === 'Semi remolque') tipoActual = 'Semirremolque';
   const preguntasVehiculoBase = preguntasBasePorTipo[tipoActual as keyof typeof preguntasBasePorTipo] || preguntasBasePorTipo['Camioneta'];
 
-  // Se combinan las preguntas de prevención al inicio seguidas por las del tipo de vehículo
   const preguntasDinamicas = [...preguntasPrevencionRemotas, ...preguntasVehiculoBase];
 
   const capturarFotoTablero = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -364,7 +373,6 @@ export default function VistaConductor() {
 
     setSubiendo(true);
 
-    // Detección de falla crítica según la configuración de la pregunta
     let tieneFallaCritica = false;
     preguntasDinamicas.forEach((p) => {
       if (respuestasChecklist[p.id] === 'no' && p.esCritica) {
@@ -506,13 +514,34 @@ export default function VistaConductor() {
     return Math.max(0, Math.min(100, puntos));
   };
 
+  const obtenerRangoRiesgo = (puntaje: number): string => {
+    if (puntaje >= 80) return 'bajo';
+    if (puntaje >= 65) return 'medio';
+    if (puntaje >= 50) return 'medio-alto';
+    return 'alto';
+  };
+
   const procesarResultadoTestGenerico = async (resultado: any) => {
     const nuevosTests = [...datosTests, resultado];
     setDatosTests(nuevosTests);
     const notaCalculada = calcularNotaGlobal(nuevosTests);
     setPuntajeGlobalPVT(notaCalculada);
 
-    if (!resultado.aprobado) {
+    const rangoRiesgo = obtenerRangoRiesgo(notaCalculada);
+
+    if (!resultado.aprobado || rangoRiesgo !== 'bajo') {
+      const resBloqueo = await registrarBloqueoPVT(
+        rutConductor,
+        rangoRiesgo,
+        nombreConductor,
+        patenteValida
+      );
+
+      setDatosBloqueoPVT({
+        bloqueadoHasta: resBloqueo.bloqueadoHasta,
+        nivelRiesgo: rangoRiesgo
+      });
+
       setMotivoBloqueo('pvt');
       setBloqueado(true);
 
@@ -525,6 +554,8 @@ export default function VistaConductor() {
           kilometraje: kilometraje || "No ingresado",
           fallaCritica: true,
           bloqueoPorTestCognitivo: true,
+          nivelRiesgoPVT: rangoRiesgo,
+          minutosEsperaPVT: resBloqueo.minutosRestantes,
           testFallido: resultado,
           testsCognitivos: nuevosTests,
           puntajePVT: notaCalculada,
@@ -534,7 +565,7 @@ export default function VistaConductor() {
 
         await registrarEnHistorial(
           'BLOQUEO_TEST_PVT',
-          `Vehículo ${patenteValida} bloqueado por reprobación en ${resultado.tipoTest} (${notaCalculada}%). Conductor: ${nombreConductor}`
+          `Conductor ${nombreConductor} (${rutConductor}) bloqueado ${resBloqueo.minutosRestantes} min por nivel de fatiga ${rangoRiesgo.toUpperCase()} (${notaCalculada}%). Patente: ${patenteValida}`
         );
       } catch (err) {
         console.error(err);
@@ -601,6 +632,39 @@ export default function VistaConductor() {
     }
   };
 
+  const handleValidarContinuarIdentificacion = async () => {
+    if (!rutConductor.trim()) {
+      alert("Por favor ingrese su RUT antes de continuar.");
+      return;
+    }
+
+    try {
+      const estadoBloqueo = await verificarBloqueoPVT(rutConductor);
+      if (estadoBloqueo.bloqueado && estadoBloqueo.bloqueadoHasta) {
+        setDatosBloqueoPVT({
+          bloqueadoHasta: estadoBloqueo.bloqueadoHasta,
+          nivelRiesgo: estadoBloqueo.nivelRiesgo || 'medio'
+        });
+        setMotivoBloqueo('pvt');
+        setBloqueado(true);
+        setIdentificado(true);
+        return;
+      }
+    } catch (err) {
+      console.error("Error al validar bloqueo inicial:", err);
+    }
+
+    const parejaElegida = seleccionarParejaAleatoria();
+    setParejaTests(parejaElegida);
+    setTestActualIndice(0);
+    setFasePVTCompletada(false);
+    setMostrarPantallaPuntajePVT(false);
+    setBloqueado(false);
+    setMotivoBloqueo(null);
+    setDatosBloqueoPVT(null);
+    setIdentificado(true);
+  };
+
   return (
     <div className="min-h-screen bg-cover bg-center bg-fixed bg-no-repeat flex flex-col items-center justify-center p-4 md:p-6 relative" style={{ backgroundImage: "url('/fondo-conductor.jpg')" }}>
       {/* 1. Identificación y Descarga Inmediata de Documentos */}
@@ -622,16 +686,7 @@ export default function VistaConductor() {
           vehiculo={vehiculo}
           forzarDescarga={forzarDescarga}
           calcularEstadoVencimiento={calcularEstadoVencimiento}
-          onContinuar={() => {
-            const parejaElegida = seleccionarParejaAleatoria();
-            setParejaTests(parejaElegida);
-            setTestActualIndice(0);
-            setFasePVTCompletada(false);
-            setMostrarPantallaPuntajePVT(false);
-            setBloqueado(false);
-            setMotivoBloqueo(null);
-            setIdentificado(true);
-          }}
+          onContinuar={handleValidarContinuarIdentificacion}
         />
       )}
 
@@ -706,15 +761,33 @@ export default function VistaConductor() {
             </div>
           ) : (
             <div className="mt-4 space-y-4">
-              <p className="text-slate-700 text-sm font-medium">
-                Evaluación psicomotora no superada (Puntaje: {puntajeGlobalPVT}%). Se detectaron indicios de fatiga, reflejos lentos o falta de atención.
-              </p>
-              <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-2xl text-xs font-bold">
-                Bloqueo preventivo de seguridad. El checklist quedó inhabilitado.
-              </div>
-              <p className="text-xs text-slate-500 font-medium">
-                Avisa al supervisor a cargo para reasignación o pausa reglamentaria.
-              </p>
+              {datosBloqueoPVT ? (
+                <PantallaEsperaPVT
+                  rut={rutConductor}
+                  bloqueadoHasta={datosBloqueoPVT.bloqueadoHasta}
+                  nivelRiesgo={datosBloqueoPVT.nivelRiesgo}
+                  onExpirado={() => {
+                    setBloqueado(false);
+                    setMotivoBloqueo(null);
+                    setDatosBloqueoPVT(null);
+                    setFasePVTCompletada(false);
+                    setTestActualIndice(0);
+                    setDatosTests([]);
+                  }}
+                />
+              ) : (
+                <>
+                  <p className="text-slate-700 text-sm font-medium">
+                    Evaluación psicomotora no superada (Puntaje: {puntajeGlobalPVT}%). Se detectaron indicios de fatiga, reflejos lentos o falta de atención.
+                  </p>
+                  <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-2xl text-xs font-bold">
+                    Bloqueo preventivo de seguridad. El checklist quedó inhabilitado.
+                  </div>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Avisa al supervisor a cargo para reasignación o pausa reglamentaria.
+                  </p>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -731,7 +804,7 @@ export default function VistaConductor() {
         </div>
       )}
 
-      {/* 6. Formulario de Checklist (con Preguntas de Prevención integradas) */}
+      {/* 6. Formulario de Checklist */}
       {identificado && fasePVTCompletada && !mostrarPantallaPuntajePVT && !encuestaCompletada && !bloqueado && (
         <div className="w-full max-w-2xl space-y-4">
           <div className="bg-white/85 backdrop-blur-md rounded-2xl border border-white/60 p-5 shadow-xl space-y-4">

@@ -7,6 +7,7 @@ import { db, storage, auth } from '../lib/firebase';
 import { toPng } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import { LOGO_BASE64 } from '../constants';
+import { ResponsiveLayout } from '../components/common/ResponsiveLayout';
 
 export default function GeneradorQR() {
   const [patente, setPatente] = useState('HBL123');
@@ -148,274 +149,363 @@ export default function GeneradorQR() {
 
       setSesionVehiculos(prev => [nuevoVehiculo, ...prev]);
 
+      // Generación de PDF optimizada para móviles y tablets
       const elemento = document.getElementById('tarjeta-pdf-generador');
       if (elemento) {
-        await toPng(elemento, { cacheBust: true });
-        const imgData = await toPng(elemento, { quality: 1, pixelRatio: 3, backgroundColor: '#ffffff', cacheBust: true });
+        const imgData = await toPng(elemento, {
+          quality: 0.95,
+          pixelRatio: 2,
+          backgroundColor: '#ffffff',
+          cacheBust: true
+        });
+
         const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [100, 150] });
         pdf.addImage(imgData, 'PNG', 0, 0, 100, 150);
 
         const nombreArchivo = `QR_${patenteMayuscula}.pdf`;
-        const esCelular = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-        const pdfBlob = pdf.output('blob');
-        const file = new File([pdfBlob], nombreArchivo, { type: 'application/pdf' });
-
-        if (esCelular && typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
-          try { await navigator.share({ files: [file] }); } catch (e) { pdf.save(nombreArchivo); }
-        } else {
-          pdf.save(nombreArchivo);
-        }
+        pdf.save(nombreArchivo);
       }
 
       limpiarFormulario();
     } catch (error) {
-      console.error(error);
-      alert('Error al generar el PDF. Verifica la consola.');
+      console.error('Error al registrar vehículo y generar QR:', error);
+      alert('Ocurrió un error al procesar el registro. Revisa la consola.');
     } finally {
       setProcesando(false);
     }
   };
 
   const descargarQRDesdeSesion = async (vehiculo: any) => {
-    const url = `https://gestion-flota-web.vercel.app/v/${vehiculo.patente}`;
     const elemento = document.getElementById(`tarjeta-pdf-sesion-${vehiculo.patente}`);
     if (!elemento) return;
 
     try {
-      const imgData = await toPng(elemento, { quality: 1, pixelRatio: 3, backgroundColor: '#ffffff', cacheBust: true });
+      const imgData = await toPng(elemento, {
+        quality: 0.95,
+        pixelRatio: 2,
+        backgroundColor: '#ffffff',
+        cacheBust: true
+      });
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [100, 150] });
       pdf.addImage(imgData, 'PNG', 0, 0, 100, 150);
       pdf.save(`QR_${vehiculo.patente}.pdf`);
     } catch (error) {
-      console.error(error);
-      const a = document.createElement('a');
-      a.href = url;
-      a.target = '_blank';
-      a.rel = 'noreferrer';
-      a.click();
+      console.error('Error al generar PDF de sesión:', error);
+      window.open(`https://gestion-flota-web.vercel.app/v/${vehiculo.patente}`, '_blank');
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 relative z-10 overflow-hidden">
-      <div style={{ position: 'absolute', top: 0, left: 0, opacity: 0, pointerEvents: 'none', zIndex: -50 }}>
+    <ResponsiveLayout
+      badge="Operaciones y Flota"
+      titulo="Central de Ingreso de Vehículos"
+      subtitulo="Registra las especificaciones técnicas, documentos vigentes y genera la tarjeta QR"
+      acciones={
+        <Link
+          to="/admin"
+          className="w-full sm:w-auto px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs sm:text-sm text-center transition-all"
+        >
+          ← Volver al Panel Admin
+        </Link>
+      }
+    >
+      {/* Tarjeta oculta fuera de pantalla para rasterización limpia en PDF */}
+      <div style={{ position: 'fixed', left: '-9999px', top: '-9999px', pointerEvents: 'none' }}>
         <div id="tarjeta-pdf-generador" className="bg-white p-8 flex flex-col items-center justify-center" style={{ width: '400px', height: '600px' }}>
-          <img src={LOGO_BASE64} alt="Logo Empresa" style={{ height: '90px', objectFit: 'contain', marginBottom: '30px' }} />
-          <h2 className="text-5xl font-black text-slate-800 mb-2 tracking-widest">{patente.toUpperCase()}</h2>
-          <p className="text-lg text-slate-500 font-bold uppercase mb-10">{tipoVehiculo}</p>
-          <div className="bg-white p-4 rounded-3xl border-8 border-slate-800 mb-8 shadow-xl">
-            <QRCodeSVG value={urlVehiculo} size={220} level="H" />
+          <img src={LOGO_BASE64} alt="Logo" style={{ height: '85px', objectFit: 'contain', marginBottom: '24px' }} />
+          <h2 className="text-5xl font-black text-slate-900 mb-2 tracking-widest">{patente.toUpperCase()}</h2>
+          <p className="text-base text-slate-500 font-bold uppercase mb-8">{tipoVehiculo}</p>
+          <div className="bg-white p-4 rounded-3xl border-4 border-slate-900 mb-6 shadow-md">
+            <QRCodeSVG value={urlVehiculo} size={210} level="H" />
           </div>
-          <p className="text-slate-500 font-bold text-center">Escanee para iniciar el checklist.</p>
+          <p className="text-xs text-slate-400 font-bold uppercase tracking-wider text-center">Escanee para iniciar el checklist</p>
         </div>
       </div>
 
-      <div className="max-w-7xl w-full">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          <div className="lg:col-span-7 bg-white p-8 rounded-3xl shadow-2xl border border-slate-100">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Formulario Principal */}
+        <div className="lg:col-span-7 bg-white p-5 sm:p-7 rounded-3xl shadow-sm border border-slate-200">
+          <form onSubmit={guardarYDescargar} className="space-y-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               <div>
-                <h2 className="text-2xl font-black text-slate-800">Agregar Nuevo Vehículo a la Flota</h2>
-                <p className="text-sm text-slate-500 mt-1">Registro técnico y documentos</p>
+                <label className="block text-xs font-black text-slate-500 uppercase mb-1">Patente / ID</label>
+                <input
+                  type="text"
+                  value={patente}
+                  onChange={(e) => setPatente(e.target.value.toUpperCase())}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-mono text-base text-center font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none uppercase"
+                  placeholder="ABCD12"
+                  required
+                />
               </div>
-              <div className="flex items-center gap-2">
-                <button 
-                  type="button" 
-                  onClick={() => window.history.back()} 
-                  className="flex items-center gap-2 text-sm font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-4 py-2 rounded-xl transition-all"
+              <div>
+                <label className="block text-xs font-black text-slate-500 uppercase mb-1">Tipo de Vehículo</label>
+                <select
+                  value={tipoVehiculo}
+                  onChange={(e) => setTipoVehiculo(e.target.value)}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 >
-                  ← Volver a Flota
-                </button>
-                <Link to="/admin" className="text-slate-500 font-bold hover:text-slate-800 transition-colors">Volver a la Flota</Link>
+                  <option>Tracto camión</option>
+                  <option>Semirremolque</option>
+                  <option>Camioneta</option>
+                </select>
               </div>
             </div>
 
-            <form onSubmit={guardarYDescargar} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-black text-slate-400 uppercase mb-2 ml-1">Patente / ID</label>
-                  <input type="text" value={patente} onChange={(e) => setPatente(e.target.value.toUpperCase())} className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-mono text-lg text-center focus:border-blue-500 focus:outline-none transition-all" placeholder="EJ: ABCD12" required />
-                </div>
-                <div>
-                  <label className="block text-xs font-black text-slate-400 uppercase mb-2 ml-1">Tipo de Vehículo</label>
-                  <select value={tipoVehiculo} onChange={(e) => setTipoVehiculo(e.target.value)} className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-slate-700 focus:border-blue-500 focus:outline-none transition-all">
-                    <option>Tracto camión</option>
-                    <option>Semirremolque</option>
-                    <option>Camioneta</option>
-                  </select>
-                </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div>
+                <label className="block text-xs font-black text-slate-500 uppercase mb-1">Marca</label>
+                <input
+                  type="text"
+                  value={marca}
+                  onChange={(e) => setMarca(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  placeholder="Ej: Scania / Toyota"
+                />
               </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-black text-slate-400 uppercase mb-2 ml-1">Marca</label>
-                  <input type="text" value={marca} onChange={(e) => setMarca(e.target.value)} className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-blue-500 focus:outline-none" placeholder="Marca" />
-                </div>
-                <div>
-                  <label className="block text-xs font-black text-slate-400 uppercase mb-2 ml-1">Modelo</label>
-                  <input type="text" value={modelo} onChange={(e) => setModelo(e.target.value)} className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-blue-500 focus:outline-none" placeholder="Modelo" />
-                </div>
+              <div>
+                <label className="block text-xs font-black text-slate-500 uppercase mb-1">Modelo</label>
+                <input
+                  type="text"
+                  value={modelo}
+                  onChange={(e) => setModelo(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  placeholder="Ej: R500 / Hilux"
+                />
               </div>
+            </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-black text-slate-400 uppercase mb-2 ml-1">Año</label>
-                  <input type="number" value={anio} onChange={(e) => setAnio(e.target.value)} className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-blue-500 focus:outline-none" placeholder="2024" />
-                </div>
-                <div>
-                  <label className="block text-xs font-black text-slate-400 uppercase mb-2 ml-1">Responsable (OwnerId)</label>
-                  <input type="text" value={ownerId} onChange={(e) => setOwnerId(e.target.value)} className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-blue-500 focus:outline-none" placeholder="admin@empresa.cl" />
-                </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div>
+                <label className="block text-xs font-black text-slate-500 uppercase mb-1">Año</label>
+                <input
+                  type="number"
+                  value={anio}
+                  onChange={(e) => setAnio(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  placeholder="2024"
+                />
               </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-black text-slate-400 uppercase mb-2 ml-1">Km Actual</label>
-                  <input type="text" value={kilometrajeActual} onChange={(e) => setKilometrajeActual(e.target.value)} className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-blue-500 focus:outline-none" placeholder="Km actual" />
-                </div>
-                <div>
-                  <label className="block text-xs font-black text-slate-400 uppercase mb-2 ml-1">Próximo Taller</label>
-                  <input type="text" value={kilometrajeTaller} onChange={(e) => setKilometrajeTaller(e.target.value)} className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-blue-500 focus:outline-none" placeholder="Km próximo taller" />
-                </div>
+              <div>
+                <label className="block text-xs font-black text-slate-500 uppercase mb-1">Responsable (OwnerId)</label>
+                <input
+                  type="text"
+                  value={ownerId}
+                  onChange={(e) => setOwnerId(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  placeholder="admin@empresa.cl"
+                />
               </div>
+            </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col gap-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-black text-slate-800 text-xs uppercase">Rev. Técnica</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div>
+                <label className="block text-xs font-black text-slate-500 uppercase mb-1">Km Actual</label>
+                <input
+                  type="text"
+                  value={kilometrajeActual}
+                  onChange={(e) => setKilometrajeActual(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  placeholder="Ej: 120000"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-black text-slate-500 uppercase mb-1">Próximo Taller (KM)</label>
+                <input
+                  type="text"
+                  value={kilometrajeTaller}
+                  onChange={(e) => setKilometrajeTaller(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  placeholder="Ej: 130000"
+                />
+              </div>
+            </div>
+
+            {/* Documentos Obligatorios */}
+            <div className="border-t border-slate-100 pt-4 space-y-3">
+              <h3 className="text-xs font-black text-slate-700 uppercase tracking-wider">
+                Documentación y Fechas de Vencimiento
+              </h3>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Revisión Técnica */}
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-700 text-xs">Revisión Técnica</span>
                     {pdfRevision && (
-                      <button type="button" onClick={() => setPdfRevision(null)} className="text-[10px] font-black px-2 py-1 rounded-full bg-red-50 text-red-600 border border-red-200 hover:bg-red-100">×</button>
+                      <button type="button" onClick={() => setPdfRevision(null)} className="text-[10px] text-rose-600 font-bold">Quitar</button>
                     )}
                   </div>
-                  <input type="date" value={vencimientoRevision} onChange={(e) => setVencimientoRevision(e.target.value)} className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-blue-500" />
-                  <label className="cursor-pointer flex flex-col items-center justify-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-3 transition-all hover:bg-blue-50">
-                    <span className="text-[11px] font-bold text-slate-600">Seleccionar PDF</span>
+                  <input
+                    type="date"
+                    value={vencimientoRevision}
+                    onChange={(e) => setVencimientoRevision(e.target.value)}
+                    className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs"
+                  />
+                  <label className="cursor-pointer bg-white border border-slate-200 rounded-lg p-2 text-center hover:bg-blue-50 transition-colors">
+                    <span className="text-[11px] font-bold text-slate-600 truncate block">
+                      {pdfRevision ? pdfRevision.name : 'Adjuntar PDF'}
+                    </span>
                     <input type="file" accept="application/pdf" onChange={(e) => setPdfRevision(e.target.files?.[0] ?? null)} className="hidden" />
-                    {pdfRevision && <span className="text-[10px] font-bold text-blue-700">{pdfRevision.name}</span>}
                   </label>
                 </div>
 
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col gap-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-black text-slate-800 text-xs uppercase">Permiso Circulación</span>
+                {/* Permiso de Circulación */}
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-700 text-xs">Permiso Circulación</span>
                     {pdfCirculacion && (
-                      <button type="button" onClick={() => setPdfCirculacion(null)} className="text-[10px] font-black px-2 py-1 rounded-full bg-red-50 text-red-600 border border-red-200 hover:bg-red-100">×</button>
+                      <button type="button" onClick={() => setPdfCirculacion(null)} className="text-[10px] text-rose-600 font-bold">Quitar</button>
                     )}
                   </div>
-                  <input type="date" value={vencimientoCirculacion} onChange={(e) => setVencimientoCirculacion(e.target.value)} className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-blue-500" />
-                  <label className="cursor-pointer flex flex-col items-center justify-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-3 transition-all hover:bg-blue-50">
-                    <span className="text-[11px] font-bold text-slate-600">Seleccionar PDF</span>
+                  <input
+                    type="date"
+                    value={vencimientoCirculacion}
+                    onChange={(e) => setVencimientoCirculacion(e.target.value)}
+                    className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs"
+                  />
+                  <label className="cursor-pointer bg-white border border-slate-200 rounded-lg p-2 text-center hover:bg-blue-50 transition-colors">
+                    <span className="text-[11px] font-bold text-slate-600 truncate block">
+                      {pdfCirculacion ? pdfCirculacion.name : 'Adjuntar PDF'}
+                    </span>
                     <input type="file" accept="application/pdf" onChange={(e) => setPdfCirculacion(e.target.files?.[0] ?? null)} className="hidden" />
-                    {pdfCirculacion && <span className="text-[10px] font-bold text-blue-700">{pdfCirculacion.name}</span>}
                   </label>
                 </div>
-              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col gap-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-black text-slate-800 text-xs uppercase">Certificado Mantención</span>
+                {/* Certificado Mantención */}
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-700 text-xs">Certificado Mantención</span>
                     {pdfCertificado && (
-                      <button type="button" onClick={() => setPdfCertificado(null)} className="text-[10px] font-black px-2 py-1 rounded-full bg-red-50 text-red-600 border border-red-200 hover:bg-red-100">×</button>
+                      <button type="button" onClick={() => setPdfCertificado(null)} className="text-[10px] text-rose-600 font-bold">Quitar</button>
                     )}
                   </div>
-                  <input type="date" value={vencimientoCertificado} onChange={(e) => setVencimientoCertificado(e.target.value)} className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-blue-500" />
-                  <label className="cursor-pointer flex flex-col items-center justify-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-3 transition-all hover:bg-blue-50">
-                    <span className="text-[11px] font-bold text-slate-600">Seleccionar PDF</span>
+                  <input
+                    type="date"
+                    value={vencimientoCertificado}
+                    onChange={(e) => setVencimientoCertificado(e.target.value)}
+                    className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs"
+                  />
+                  <label className="cursor-pointer bg-white border border-slate-200 rounded-lg p-2 text-center hover:bg-blue-50 transition-colors">
+                    <span className="text-[11px] font-bold text-slate-600 truncate block">
+                      {pdfCertificado ? pdfCertificado.name : 'Adjuntar PDF'}
+                    </span>
                     <input type="file" accept="application/pdf" onChange={(e) => setPdfCertificado(e.target.files?.[0] ?? null)} className="hidden" />
-                    {pdfCertificado && <span className="text-[10px] font-bold text-blue-700">{pdfCertificado.name}</span>}
                   </label>
                 </div>
 
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col gap-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-black text-slate-800 text-xs uppercase">SOAP</span>
+                {/* SOAP */}
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-700 text-xs">Seguro SOAP</span>
                     {pdfSoap && (
-                      <button type="button" onClick={() => setPdfSoap(null)} className="text-[10px] font-black px-2 py-1 rounded-full bg-red-50 text-red-600 border border-red-200 hover:bg-red-100">×</button>
+                      <button type="button" onClick={() => setPdfSoap(null)} className="text-[10px] text-rose-600 font-bold">Quitar</button>
                     )}
                   </div>
-                  <input type="date" value={vencimientoSoap} onChange={(e) => setVencimientoSoap(e.target.value)} className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:border-blue-500" />
-                  <label className="cursor-pointer flex flex-col items-center justify-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-3 transition-all hover:bg-blue-50">
-                    <span className="text-[11px] font-bold text-slate-600">Seleccionar PDF</span>
+                  <input
+                    type="date"
+                    value={vencimientoSoap}
+                    onChange={(e) => setVencimientoSoap(e.target.value)}
+                    className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs"
+                  />
+                  <label className="cursor-pointer bg-white border border-slate-200 rounded-lg p-2 text-center hover:bg-blue-50 transition-colors">
+                    <span className="text-[11px] font-bold text-slate-600 truncate block">
+                      {pdfSoap ? pdfSoap.name : 'Adjuntar PDF'}
+                    </span>
                     <input type="file" accept="application/pdf" onChange={(e) => setPdfSoap(e.target.files?.[0] ?? null)} className="hidden" />
-                    {pdfSoap && <span className="text-[10px] font-bold text-blue-700">{pdfSoap.name}</span>}
                   </label>
                 </div>
               </div>
 
               {/* Pauta de Mantención */}
-              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col gap-3">
-                <div className="flex items-center justify-between gap-2">
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 flex flex-col gap-2">
+                <div className="flex items-center justify-between">
                   <div>
-                    <span className="font-black text-slate-800 text-xs uppercase">Pauta de Mantención</span>
-                    <span className="text-[11px] text-slate-400 block font-normal">Documento de inspección o preventivo (PDF)</span>
+                    <span className="font-bold text-slate-700 text-xs block">Pauta de Mantención Oficial</span>
+                    <span className="text-[10px] text-slate-400">Pauta técnica periódica (PDF)</span>
                   </div>
                   {pdfPauta && (
-                    <button type="button" onClick={() => setPdfPauta(null)} className="text-[10px] font-black px-2 py-1 rounded-full bg-red-50 text-red-600 border border-red-200 hover:bg-red-100">×</button>
+                    <button type="button" onClick={() => setPdfPauta(null)} className="text-[10px] text-rose-600 font-bold">Quitar</button>
                   )}
                 </div>
-                <label className="cursor-pointer flex flex-col items-center justify-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-3 transition-all hover:bg-blue-50">
-                  <span className="text-[11px] font-bold text-slate-600">Seleccionar PDF de Pauta</span>
+                <label className="cursor-pointer bg-white border border-slate-200 rounded-lg p-2.5 text-center hover:bg-blue-50 transition-colors">
+                  <span className="text-[11px] font-bold text-slate-600 truncate block">
+                    {pdfPauta ? pdfPauta.name : 'Seleccionar PDF de Pauta'}
+                  </span>
                   <input type="file" accept="application/pdf" onChange={(e) => setPdfPauta(e.target.files?.[0] ?? null)} className="hidden" />
-                  {pdfPauta && <span className="text-[10px] font-bold text-blue-700">{pdfPauta.name}</span>}
                 </label>
               </div>
-
-              <div className="flex gap-4">
-                <button type="submit" disabled={procesando} className={`flex-1 font-bold py-4 rounded-xl transition-all shadow-md ${procesando ? 'bg-slate-400 text-white cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}> 
-                  {procesando ? 'Procesando...' : 'Registrar Vehículo y Generar QR'}
-                </button>
-              </div>
-            </form>
-          </div>
-
-          <aside className="lg:col-span-5 bg-white p-8 rounded-3xl shadow-2xl border border-slate-100 max-h-[800px] overflow-y-auto custom-scrollbar">
-            <div className="border-b border-slate-100 pb-4 mb-6">
-              <h2 className="text-2xl font-black text-slate-800">Añadidos recientemente</h2>
             </div>
 
-            {sesionVehiculos.length === 0 ? (
-              <div className="text-sm text-slate-500 italic bg-slate-50 rounded-2xl p-8 border border-slate-100">
-                Los vehículos que registres en esta sesión aparecerán aquí.
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {sesionVehiculos.map((vehiculo) => {
-                  const qrUrl = `https://gestion-flota-web.vercel.app/v/${vehiculo.patente}`;
-                  return (
-                    <div key={vehiculo.id ?? vehiculo.patente} className="bg-slate-50 border border-slate-200 rounded-2xl p-4 shadow-sm">
-                      <div style={{ position: 'absolute', top: 0, left: 0, opacity: 0, pointerEvents: 'none', zIndex: -50 }}>
-                        <div id={`tarjeta-pdf-sesion-${vehiculo.patente}`} className="bg-white p-8 flex flex-col items-center justify-center" style={{ width: '400px', height: '600px', backgroundColor: 'white' }}>
-                          <img src={LOGO_BASE64} alt="Logo Empresa" style={{ height: '90px', objectFit: 'contain', marginBottom: '30px' }} />
-                          <h2 className="text-5xl font-black text-slate-800 mb-2 tracking-widest">{vehiculo.patente}</h2>
-                          <p className="text-lg text-slate-500 font-bold uppercase mb-10">{vehiculo.tipo || 'Control de Flota'}</p>
-                          <div className="bg-white p-4 rounded-3xl border-8 border-slate-800 mb-8 shadow-xl">
-                            <QRCodeSVG value={qrUrl} size={220} level="H" includeMargin={false} />
-                          </div>
-                          <p className="text-slate-500 font-bold text-center">Escanee para iniciar el checklist.</p>
-                        </div>
-                      </div>
+            <button
+              type="submit"
+              disabled={procesando}
+              className={`w-full font-bold py-3.5 rounded-xl transition-all shadow-sm text-xs sm:text-sm active:scale-[0.99] ${
+                procesando ? 'bg-slate-400 text-white cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'
+              }`}
+            >
+              {procesando ? 'Guardando y generando PDF...' : 'Registrar Vehículo y Descargar QR'}
+            </button>
+          </form>
+        </div>
 
-                      <div className="flex items-center justify-between gap-4">
-                        <div>
-                          <div className="text-3xl font-black text-slate-800 tracking-widest">{vehiculo.patente}</div>
-                          <div className="text-xs font-bold text-slate-500 uppercase mt-1">{vehiculo.marca || '--'} / {vehiculo.modelo || '--'}</div>
+        {/* Panel Lateral: Añadidos Recientemente */}
+        <aside className="lg:col-span-5 bg-white p-5 sm:p-7 rounded-3xl shadow-sm border border-slate-200">
+          <h2 className="text-sm font-black text-slate-800 uppercase tracking-wide border-b border-slate-100 pb-3 mb-4">
+            Añadidos en esta Sesión ({sesionVehiculos.length})
+          </h2>
+
+          {sesionVehiculos.length === 0 ? (
+            <div className="text-xs text-slate-400 italic bg-slate-50 rounded-2xl p-6 text-center border border-slate-100">
+              Los vehículos que registres aparecerán aquí listos para descargar.
+            </div>
+          ) : (
+            <div className="space-y-3 max-h-[600px] overflow-y-auto scroll-touch pr-1">
+              {sesionVehiculos.map((v) => {
+                const qrUrl = `https://gestion-flota-web.vercel.app/v/${v.patente}`;
+                return (
+                  <div key={v.id ?? v.patente} className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 shadow-sm">
+                    {/* Tarjeta oculta por patente */}
+                    <div style={{ position: 'fixed', left: '-9999px', top: '-9999px', pointerEvents: 'none' }}>
+                      <div id={`tarjeta-pdf-sesion-${v.patente}`} className="bg-white p-8 flex flex-col items-center justify-center" style={{ width: '400px', height: '600px' }}>
+                        <img src={LOGO_BASE64} alt="Logo" style={{ height: '85px', objectFit: 'contain', marginBottom: '24px' }} />
+                        <h2 className="text-5xl font-black text-slate-900 mb-2 tracking-widest">{v.patente}</h2>
+                        <p className="text-base text-slate-500 font-bold uppercase mb-8">{v.tipo || 'Flota'}</p>
+                        <div className="bg-white p-4 rounded-3xl border-4 border-slate-900 mb-6 shadow-md">
+                          <QRCodeSVG value={qrUrl} size={210} level="H" />
                         </div>
-                        <div className="bg-white p-2 rounded-2xl border border-slate-200">
-                          <QRCodeSVG value={qrUrl} size={70} level="H" includeMargin={false} />
-                        </div>
-                      </div>
-                      <div className="mt-4 flex justify-end">
-                        <button onClick={() => descargarQRDesdeSesion(vehiculo)} className="text-xs bg-blue-600 text-white font-bold px-4 py-2 rounded-xl hover:bg-blue-700">Descargar QR PDF</button>
+                        <p className="text-xs text-slate-400 font-bold uppercase tracking-wider text-center">Escanee para iniciar el checklist</p>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </aside>
-        </div>
+
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-xl font-black text-slate-800 font-mono tracking-wider">{v.patente}</div>
+                        <div className="text-[11px] font-bold text-slate-500 uppercase">
+                          {v.marca || '--'} / {v.modelo || '--'} ({v.tipo})
+                        </div>
+                      </div>
+                      <div className="bg-white p-1.5 rounded-xl border border-slate-200 shrink-0">
+                        <QRCodeSVG value={qrUrl} size={50} level="H" />
+                      </div>
+                    </div>
+
+                    <div className="mt-3 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => descargarQRDesdeSesion(v)}
+                        className="text-xs bg-slate-800 hover:bg-slate-900 text-white font-bold px-3 py-1.5 rounded-xl transition-all"
+                      >
+                        Descargar QR PDF
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </aside>
       </div>
-    </div>
+    </ResponsiveLayout>
   );
 }

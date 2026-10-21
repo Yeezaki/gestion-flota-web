@@ -1,1 +1,21 @@
 @import "tailwindcss";
+
+html, body {
+  overflow-x: hidden;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* Desplazamiento táctil fluido para tablets y móviles */
+.scroll-touch {
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  scrollbar-width: thin;
+}
+
+/* Previene que la pantalla se mueva mientras se dibuja la firma o se hacen tests */
+.touch-draw {
+  touch-action: none !important;
+  user-select: none;
+  -webkit-user-select: none;
+}

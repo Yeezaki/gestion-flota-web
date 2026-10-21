@@ -37,7 +37,7 @@ export const ModalVisorDocumento: React.FC<ModalVisorDocumentoProps> = ({
       setHaLeido(false);
       setTieneTrazos(false);
       setErrorFirma(null);
-      limpiarCanvas();
+      setTimeout(limpiarCanvas, 50);
     }
   }, [isOpen, documentoId]);
 
@@ -50,25 +50,29 @@ export const ModalVisorDocumento: React.FC<ModalVisorDocumentoProps> = ({
     setTieneTrazos(false);
   };
 
+  // Cálculo proporcional exacto para touch en iPad/iPhone (evita desfases en pantallas Retina)
   const getCoordinates = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
+
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
     if ('touches' in e) {
       const touch = e.touches[0];
       return {
-        x: touch.clientX - rect.left,
-        y: touch.clientY - rect.top
+        x: (touch.clientX - rect.left) * scaleX,
+        y: (touch.clientY - rect.top) * scaleY
       };
     }
     return {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top
+      x: (e.clientX - rect.left) * scaleX,
+      y: (e.clientY - rect.top) * scaleY
     };
   };
 
   const iniciarDibujo = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
-    e.preventDefault();
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -76,15 +80,14 @@ export const ModalVisorDocumento: React.FC<ModalVisorDocumentoProps> = ({
     const { x, y } = getCoordinates(e);
     ctx.beginPath();
     ctx.moveTo(x, y);
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2.5;
     ctx.lineCap = 'round';
-    ctx.strokeStyle = '#1e293b';
+    ctx.strokeStyle = '#0f172a';
     setDibujando(true);
   };
 
   const trazar = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     if (!dibujando) return;
-    e.preventDefault();
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -95,8 +98,7 @@ export const ModalVisorDocumento: React.FC<ModalVisorDocumentoProps> = ({
     setTieneTrazos(true);
   };
 
-  const terminarDibujo = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
-    e.preventDefault();
+  const terminarDibujo = () => {
     setDibujando(false);
   };
 
@@ -137,19 +139,21 @@ export const ModalVisorDocumento: React.FC<ModalVisorDocumentoProps> = ({
   if (!isOpen || !docConfig) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-4 backdrop-blur-sm">
-      <div className="relative flex flex-col max-h-[92vh] w-full max-w-3xl rounded-xl bg-white shadow-2xl overflow-hidden border border-slate-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-3 sm:p-6 backdrop-blur-sm antialiased">
+      <div className="relative flex flex-col max-h-[92vh] w-full max-w-3xl rounded-2xl bg-white shadow-2xl overflow-hidden border border-slate-200">
         
         {/* Cabecera */}
-        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 bg-slate-50">
+        <div className="flex items-center justify-between border-b border-slate-200 px-5 sm:px-6 py-4 bg-slate-50">
           <div>
-            <h3 className="text-lg font-bold text-slate-800">{docConfig.titulo}</h3>
-            <p className="text-xs text-slate-500">Versión {docConfig.version} - Documentación Operativa Obligatoria</p>
+            <h3 className="text-base sm:text-lg font-bold text-slate-800">{docConfig.titulo}</h3>
+            <p className="text-xs text-slate-500">
+              Versión {docConfig.version} — Documentación Operativa Obligatoria
+            </p>
           </div>
           <button
             onClick={onClose}
             disabled={guardando}
-            className="text-slate-400 hover:text-slate-600 transition-colors p-1 rounded-md"
+            className="text-slate-400 hover:text-slate-600 transition-colors p-1.5 rounded-lg hover:bg-slate-200/50"
             aria-label="Cerrar"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -159,55 +163,47 @@ export const ModalVisorDocumento: React.FC<ModalVisorDocumentoProps> = ({
         </div>
 
         {/* Cuerpo del Documento */}
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+        <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5 space-y-5 scroll-touch">
           
-          {/* Barra de Páginas */}
-          <div className="flex items-center justify-between bg-slate-100 rounded-lg p-2 border border-slate-200">
-            <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">
+          {/* Selector de Páginas */}
+          <div className="flex items-center justify-between bg-slate-100 rounded-xl p-2 border border-slate-200">
+            <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">
               Hoja {paginaActual + 1} de {docConfig.paginas.length}
             </span>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setPaginaActual(0)}
-                className={`px-3 py-1 text-xs font-medium rounded ${
-                  paginaActual === 0
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white text-slate-700 hover:bg-slate-200 border border-slate-300'
-                }`}
-              >
-                Página 1
-              </button>
-              <button
-                type="button"
-                onClick={() => setPaginaActual(1)}
-                className={`px-3 py-1 text-xs font-medium rounded ${
-                  paginaActual === 1
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white text-slate-700 hover:bg-slate-200 border border-slate-300'
-                }`}
-              >
-                Página 2
-              </button>
+            <div className="flex gap-1.5">
+              {docConfig.paginas.map((_, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => setPaginaActual(idx)}
+                  className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${
+                    paginaActual === idx
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'bg-white text-slate-700 hover:bg-slate-200 border border-slate-300'
+                  }`}
+                >
+                  Página {idx + 1}
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* Contenido de la Hoja Seleccionada */}
-          <div className="min-h-[160px] p-5 rounded-lg border border-slate-300 bg-slate-50/50 shadow-inner font-mono text-sm leading-relaxed text-slate-700">
+          {/* Texto Oficial */}
+          <div className="min-h-[140px] p-4 sm:p-5 rounded-xl border border-slate-200 bg-slate-50/60 font-mono text-xs sm:text-sm leading-relaxed text-slate-700 whitespace-pre-line">
             <div className="mb-2 font-sans font-bold text-slate-900 border-b border-slate-200 pb-1">
-              Contenido oficial - Hoja {paginaActual + 1}
+              Contenido oficial — Hoja {paginaActual + 1}
             </div>
             {docConfig.paginas[paginaActual]}
           </div>
 
-          {/* Declaracion de toma de conocimiento */}
-          <div className="rounded-lg border border-blue-200 bg-blue-50/60 p-4">
+          {/* Declaración */}
+          <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-3.5">
             <label className="flex items-start gap-3 cursor-pointer">
               <input
                 type="checkbox"
                 checked={haLeido}
                 onChange={(e) => setHaLeido(e.target.checked)}
-                className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
               />
               <span className="text-xs font-medium text-slate-800 leading-normal">
                 Declaro que he leído, comprendido y tomado conocimiento cabal de las disposiciones, riesgos y protocolos descritos en este documento ({docConfig.titulo}).
@@ -215,27 +211,27 @@ export const ModalVisorDocumento: React.FC<ModalVisorDocumentoProps> = ({
             </label>
           </div>
 
-          {/* Recuadro de Firma */}
+          {/* Canvas de Firma */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">
-                Firma Digital del Conductor ({conductorNombre} - {conductorRut})
+                Firma Digital del Conductor ({conductorNombre} — {conductorRut})
               </label>
               <button
                 type="button"
                 onClick={limpiarCanvas}
-                className="text-xs text-red-600 hover:text-red-700 underline font-medium"
+                className="text-xs text-rose-600 hover:text-rose-700 font-bold"
               >
                 Limpiar firma
               </button>
             </div>
             
-            <div className="border-2 border-dashed border-slate-300 rounded-lg overflow-hidden bg-white">
+            <div className="border-2 border-dashed border-slate-300 rounded-xl overflow-hidden bg-white touch-draw">
               <canvas
                 ref={canvasRef}
                 width={650}
                 height={150}
-                className="w-full h-[150px] touch-none cursor-crosshair bg-white"
+                className="w-full h-[150px] cursor-crosshair bg-white touch-draw block"
                 onMouseDown={iniciarDibujo}
                 onMouseMove={trazar}
                 onMouseUp={terminarDibujo}
@@ -245,26 +241,25 @@ export const ModalVisorDocumento: React.FC<ModalVisorDocumentoProps> = ({
                 onTouchEnd={terminarDibujo}
               />
             </div>
-            <p className="text-[11px] text-slate-500">
-              Dibuje su firma dentro del recuadro usando el dedo en pantallas táctiles o el puntero del mouse.
+            <p className="text-[11px] text-slate-400">
+              Firme con su dedo o lápiz óptico dentro del recuadro.
             </p>
           </div>
 
           {errorFirma && (
-            <div className="rounded-md bg-red-50 p-3 text-xs text-red-700 border border-red-200 font-medium">
+            <div className="rounded-xl bg-rose-50 p-3 text-xs text-rose-700 border border-rose-200 font-semibold text-center">
               {errorFirma}
             </div>
           )}
-
         </div>
 
         {/* Acciones */}
-        <div className="flex items-center justify-end gap-3 border-t border-slate-200 px-6 py-4 bg-slate-50">
+        <div className="flex items-center justify-end gap-3 border-t border-slate-200 px-5 sm:px-6 py-4 bg-slate-50">
           <button
             type="button"
             onClick={onClose}
             disabled={guardando}
-            className="px-4 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors"
+            className="px-4 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-300 rounded-xl hover:bg-slate-100 transition-colors"
           >
             Cancelar
           </button>
@@ -272,9 +267,9 @@ export const ModalVisorDocumento: React.FC<ModalVisorDocumentoProps> = ({
             type="button"
             onClick={handleSubmit}
             disabled={guardando || !haLeido || !tieneTrazos}
-            className="px-5 py-2 text-xs font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+            className="px-5 py-2 text-xs font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm active:scale-95"
           >
-            {guardando ? 'Guardando Registro...' : 'He leído y tomado conocimiento'}
+            {guardando ? 'Guardando Registro...' : 'Confirmar y Guardar Firma'}
           </button>
         </div>
 

@@ -3,6 +3,7 @@ import { collection, query, getDocs, deleteDoc, doc, where, updateDoc, addDoc, s
 import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { db, auth, firebaseConfig } from '../../lib/firebase';
+import { ResponsiveTable } from '../common/ResponsiveTable';
 
 export default function TabUsuarios() {
   const [usuariosRegistrados, setUsuariosRegistrados] = useState<any[]>([]);
@@ -31,7 +32,7 @@ export default function TabUsuarios() {
     try {
       const q = query(collection(db, 'usuarios'), where('proyecto', '==', 'flota_app'));
       const snap = await getDocs(q);
-      const users = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const users = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setUsuariosRegistrados(users);
     } catch (error) {
       console.error("Error al cargar usuarios:", error);
@@ -138,26 +139,53 @@ export default function TabUsuarios() {
   };
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-      <div className="bg-white rounded-3xl shadow-lg p-6 border border-slate-100 xl:col-span-1 h-fit">
-        <div className="mb-6 border-b border-slate-100 pb-4">
-          <h2 className="text-xl font-bold text-slate-800">{editandoUsuarioId ? 'Editar Perfil' : 'Crear Usuario'}</h2>
-          <p className="text-sm text-slate-500 mt-1">Gestiona los accesos al sistema.</p>
+    <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+      
+      {/* Columna Izquierda: Formulario Crear / Editar */}
+      <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-sm xl:col-span-4 h-fit">
+        <div className="mb-4 border-b border-slate-100 pb-3">
+          <h2 className="text-base sm:text-lg font-black text-slate-800">
+            {editandoUsuarioId ? 'Editar Perfil' : 'Crear Usuario'}
+          </h2>
+          <p className="text-xs text-slate-500">Gestiona los accesos al sistema.</p>
         </div>
-        <form onSubmit={guardarUsuario} className="space-y-4">
+
+        <form onSubmit={guardarUsuario} className="space-y-3.5">
           <div>
-            <label className="block text-sm font-medium text-slate-600 mb-1">Correo Electrónico</label>
-            <input type="email" required disabled={!!editandoUsuarioId} value={formUsuario.email} onChange={(e) => setFormUsuario({...formUsuario, email: e.target.value})} className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:bg-slate-100 disabled:text-slate-500" placeholder="usuario@empresa.com" />
+            <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Correo Electrónico</label>
+            <input 
+              type="email" 
+              required 
+              disabled={!!editandoUsuarioId} 
+              value={formUsuario.email} 
+              onChange={(e) => setFormUsuario({...formUsuario, email: e.target.value})} 
+              className="w-full p-2.5 border border-slate-300 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:bg-slate-100" 
+              placeholder="usuario@empresa.com" 
+            />
           </div>
+
           {!editandoUsuarioId && (
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">Contraseña (Mínimo 6 caracteres)</label>
-              <input type="password" required minLength={6} value={formUsuario.password} onChange={(e) => setFormUsuario({...formUsuario, password: e.target.value})} className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="••••••••" />
+              <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Contraseña (Mínimo 6)</label>
+              <input 
+                type="password" 
+                required 
+                minLength={6} 
+                value={formUsuario.password} 
+                onChange={(e) => setFormUsuario({...formUsuario, password: e.target.value})} 
+                className="w-full p-2.5 border border-slate-300 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" 
+                placeholder="••••••••" 
+              />
             </div>
           )}
+
           <div>
-            <label className="block text-sm font-medium text-slate-600 mb-1">Tipo de Rol</label>
-            <select value={formUsuario.rol} onChange={(e) => setFormUsuario({...formUsuario, rol: e.target.value})} className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none font-bold text-slate-700">
+            <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Tipo de Rol</label>
+            <select 
+              value={formUsuario.rol} 
+              onChange={(e) => setFormUsuario({...formUsuario, rol: e.target.value})} 
+              className="w-full p-2.5 border border-slate-300 rounded-xl text-xs sm:text-sm font-bold text-slate-700 bg-white"
+            >
               <option value="admin">Administrador General</option>
               <option value="prevencion_riesgo">Prevención de Riesgos</option>
               <option value="torre_control">Torre de Control</option>
@@ -165,205 +193,137 @@ export default function TabUsuarios() {
               <option value="generador_qr">Generador de QRs (Restringido)</option>
             </select>
           </div>
-          
+
           {formUsuario.rol === 'taller' && (
-            <div className="space-y-4 p-4 bg-blue-50 rounded-xl border border-blue-100">
-              <div>
-                <label className="block text-sm font-medium text-blue-800 mb-1">Nombre del Taller</label>
-                <input type="text" required value={formUsuario.nombreTaller} onChange={(e) => setFormUsuario({...formUsuario, nombreTaller: e.target.value})} className="w-full p-3 border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Ej: LubriLoa" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-blue-800 mb-1">Especialidad</label>
-                <input type="text" required value={formUsuario.especialidadTaller} onChange={(e) => setFormUsuario({...formUsuario, especialidadTaller: e.target.value})} className="w-full p-3 border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Ej: Mecánica Integrada, Pintura" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-blue-800 mb-1">Dirección Exacta</label>
-                <input type="text" required value={formUsuario.direccionTaller} onChange={(e) => setFormUsuario({...formUsuario, direccionTaller: e.target.value})} className="w-full p-3 border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Ej: Vicuña Mackenna 2945" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-blue-800 mb-1">Ciudad</label>
-                <input type="text" required value={formUsuario.ciudadTaller} onChange={(e) => setFormUsuario({...formUsuario, ciudadTaller: e.target.value})} className="w-full p-3 border border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Ej: Calama" />
-              </div>
+            <div className="space-y-3 p-3 bg-blue-50/60 rounded-xl border border-blue-100">
+              <input type="text" required placeholder="Nombre del Taller" value={formUsuario.nombreTaller} onChange={(e) => setFormUsuario({...formUsuario, nombreTaller: e.target.value})} className="w-full p-2 bg-white border border-blue-200 rounded-lg text-xs" />
+              <input type="text" required placeholder="Especialidad (ej: Mecánica Integrada)" value={formUsuario.especialidadTaller} onChange={(e) => setFormUsuario({...formUsuario, especialidadTaller: e.target.value})} className="w-full p-2 bg-white border border-blue-200 rounded-lg text-xs" />
+              <input type="text" required placeholder="Dirección Exacta" value={formUsuario.direccionTaller} onChange={(e) => setFormUsuario({...formUsuario, direccionTaller: e.target.value})} className="w-full p-2 bg-white border border-blue-200 rounded-lg text-xs" />
+              <input type="text" required placeholder="Ciudad" value={formUsuario.ciudadTaller} onChange={(e) => setFormUsuario({...formUsuario, ciudadTaller: e.target.value})} className="w-full p-2 bg-white border border-blue-200 rounded-lg text-xs" />
             </div>
           )}
 
           {formUsuario.rol === 'generador_qr' && (
-            <div className="space-y-4 p-4 bg-purple-50 rounded-xl border border-purple-100">
-              <div>
-                <label className="block text-sm font-medium text-purple-800 mb-1">Razón Social / Empresa</label>
-                <input type="text" required value={formUsuario.razonSocial} onChange={(e) => setFormUsuario({...formUsuario, razonSocial: e.target.value})} className="w-full p-3 border border-purple-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none bg-white" placeholder="Ej: Transportes XYZ" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-purple-800 mb-1">Teléfono de Contacto</label>
-                <input type="text" required value={formUsuario.telefono} onChange={(e) => setFormUsuario({...formUsuario, telefono: e.target.value})} className="w-full p-3 border border-purple-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none bg-white" placeholder="Ej: +569 1234 5678" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-purple-800 mb-1">Dirección / Sede</label>
-                <input type="text" required value={formUsuario.direccion} onChange={(e) => setFormUsuario({...formUsuario, direccion: e.target.value})} className="w-full p-3 border border-purple-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none bg-white" placeholder="Ej: Parque Industrial, Sitio 4" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-purple-800 mb-1">Plan contratado (Límite de QRs)</label>
-                <select value={formUsuario.limiteQR} onChange={(e) => setFormUsuario({...formUsuario, limiteQR: Number(e.target.value)})} className="w-full p-3 border border-purple-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none bg-white">
-                  <option value={1}>Plan Básico (1 QR máximo)</option>
-                  <option value={10}>Plan Intermedio (10 QRs máximo)</option>
-                  <option value={20}>Plan Avanzado (20 QRs máximo)</option>
-                  <option value={50}>Plan Corporativo (50 QRs máximo)</option>
-                </select>
-                {editandoUsuarioId && (
-                  <p className="text-xs text-purple-600 mt-2 italic">Al actualizar el plan no se reiniciará la cantidad de QRs ya creados por el usuario.</p>
-                )}
-              </div>
+            <div className="space-y-3 p-3 bg-purple-50/60 rounded-xl border border-purple-100">
+              <input type="text" required placeholder="Razón Social / Empresa" value={formUsuario.razonSocial} onChange={(e) => setFormUsuario({...formUsuario, razonSocial: e.target.value})} className="w-full p-2 bg-white border border-purple-200 rounded-lg text-xs" />
+              <input type="text" required placeholder="Teléfono de Contacto" value={formUsuario.telefono} onChange={(e) => setFormUsuario({...formUsuario, telefono: e.target.value})} className="w-full p-2 bg-white border border-purple-200 rounded-lg text-xs" />
+              <input type="text" required placeholder="Dirección / Sede" value={formUsuario.direccion} onChange={(e) => setFormUsuario({...formUsuario, direccion: e.target.value})} className="w-full p-2 bg-white border border-purple-200 rounded-lg text-xs" />
+              <select value={formUsuario.limiteQR} onChange={(e) => setFormUsuario({...formUsuario, limiteQR: Number(e.target.value)})} className="w-full p-2 bg-white border border-purple-200 rounded-lg text-xs font-bold">
+                <option value={1}>Plan Básico (1 QR)</option>
+                <option value={10}>Plan Intermedio (10 QRs)</option>
+                <option value={20}>Plan Avanzado (20 QRs)</option>
+                <option value={50}>Plan Corporativo (50 QRs)</option>
+              </select>
             </div>
           )}
 
           {(formUsuario.rol === 'prevencion_riesgo' || formUsuario.rol === 'torre_control') && (
-            <div className="space-y-4 p-4 bg-slate-50 rounded-xl border border-slate-200">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Nombre Completo del Operador</label>
-                <input type="text" required value={formUsuario.razonSocial} onChange={(e) => setFormUsuario({...formUsuario, razonSocial: e.target.value})} className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white" placeholder="Ej: Carlos Muñoz Valenzuela" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Teléfono Institucional</label>
-                <input type="text" value={formUsuario.telefono} onChange={(e) => setFormUsuario({...formUsuario, telefono: e.target.value})} className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white" placeholder="+56 9 8765 4321" />
-              </div>
+            <div className="space-y-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+              <input type="text" required placeholder="Nombre Completo del Operador" value={formUsuario.razonSocial} onChange={(e) => setFormUsuario({...formUsuario, razonSocial: e.target.value})} className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs" />
+              <input type="text" placeholder="Teléfono Institucional" value={formUsuario.telefono} onChange={(e) => setFormUsuario({...formUsuario, telefono: e.target.value})} className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs" />
             </div>
           )}
 
-          <div className="flex gap-2 mt-4">
-            <button type="submit" disabled={creandoUsuario} className={`flex-1 font-bold py-3 rounded-xl transition-all shadow-md ${creandoUsuario ? 'bg-slate-400 text-white' : 'bg-slate-800 text-white hover:bg-slate-900'}`}>
+          <div className="flex gap-2 pt-2">
+            <button 
+              type="submit" 
+              disabled={creandoUsuario} 
+              className="flex-1 font-bold py-2.5 rounded-xl text-xs sm:text-sm bg-slate-800 hover:bg-slate-900 text-white transition-all shadow-sm"
+            >
               {creandoUsuario ? 'Guardando...' : (editandoUsuarioId ? 'Guardar Cambios' : 'Crear Usuario')}
             </button>
             {editandoUsuarioId && (
-              <button type="button" onClick={limpiarFormUsuario} className="px-4 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition-all">Cancelar</button>
+              <button 
+                type="button" 
+                onClick={limpiarFormUsuario} 
+                className="px-3 py-2.5 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-200"
+              >
+                Cancelar
+              </button>
             )}
           </div>
         </form>
       </div>
 
-      <div className="bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-100 xl:col-span-2">
-        <div className="p-6 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
-          <h2 className="text-xl font-bold text-slate-800">Cuentas Registradas</h2>
+      {/* Columna Derecha: Cuentas Registradas */}
+      <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-sm xl:col-span-8 space-y-4">
+        <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+          <h2 className="text-base sm:text-lg font-black text-slate-800">
+            Cuentas Registradas ({usuariosRegistrados.length})
+          </h2>
         </div>
 
-        <div className="hidden md:block overflow-x-auto w-full">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-white text-slate-600 text-xs uppercase tracking-wider border-b border-slate-100">
-                <th className="p-4 font-bold">Correo (Auth)</th>
-                <th className="p-4 font-bold">Detalle Perfil</th>
-                <th className="p-4 font-bold text-center">Acciones</th>
+        <ResponsiveTable minWidth="min-w-[650px]">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-slate-100 text-slate-700">
+              <tr>
+                <th className="p-3">Correo (Auth)</th>
+                <th className="p-3">Detalle Perfil</th>
+                <th className="p-3 text-center">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {usuariosRegistrados.length === 0 ? (
-                <tr><td colSpan={3} className="p-8 text-center text-slate-400">Cargando usuarios...</td></tr>
-              ) : usuariosRegistrados.map((user) => (
-                <tr key={user.id} className="hover:bg-slate-50">
-                  <td className="p-4">
-                    <span className="font-bold text-slate-800">{user.email}</span>
-                    <span className={`text-[10px] block mt-1 uppercase font-bold px-2 py-0.5 rounded inline-block ${
-                      user.rol === 'admin' ? 'bg-indigo-100 text-indigo-700' : 
-                      user.rol === 'taller' ? 'bg-blue-100 text-blue-700' :
-                      user.rol === 'prevencion_riesgo' ? 'bg-amber-100 text-amber-800' :
-                      user.rol === 'torre_control' ? 'bg-cyan-100 text-cyan-800' :
-                      'bg-purple-100 text-purple-700'
-                    }`}>
-                      {user.rol === 'prevencion_riesgo' ? 'Prevención' : user.rol === 'torre_control' ? 'Torre de Control' : user.rol}
-                    </span>
-                  </td>
-                  <td className="p-4">
-                    {user.rol === 'taller' ? (
-                      <div className="text-sm">
-                        <p className="font-black text-blue-700">{user.nombreTaller || 'Sin nombre'}</p>
-                        <p className="text-slate-500 font-medium text-xs">{user.especialidadTaller}</p>
-                        <p className="text-slate-500 text-xs">{user.ciudadTaller ? `${user.direccionTaller}, ${user.ciudadTaller}` : user.ubicacionTaller}</p>
+                <tr><td colSpan={3} className="p-6 text-center text-slate-400">Cargando usuarios...</td></tr>
+              ) : (
+                usuariosRegistrados.map((user) => (
+                  <tr key={user.id} className="hover:bg-slate-50">
+                    <td className="p-3">
+                      <span className="font-bold text-slate-800 block">{user.email}</span>
+                      <span className={`text-[10px] uppercase font-black px-2 py-0.5 rounded inline-block mt-1 ${
+                        user.rol === 'admin' ? 'bg-indigo-100 text-indigo-700' : 
+                        user.rol === 'taller' ? 'bg-blue-100 text-blue-700' :
+                        user.rol === 'prevencion_riesgo' ? 'bg-amber-100 text-amber-800' :
+                        user.rol === 'torre_control' ? 'bg-cyan-100 text-cyan-800' :
+                        'bg-purple-100 text-purple-700'
+                      }`}>
+                        {user.rol === 'prevencion_riesgo' ? 'Prevención' : user.rol === 'torre_control' ? 'Torre de Control' : user.rol}
+                      </span>
+                    </td>
+                    <td className="p-3 text-slate-600">
+                      {user.rol === 'taller' ? (
+                        <div>
+                          <p className="font-bold text-blue-700">{user.nombreTaller || 'Sin nombre'}</p>
+                          <p className="text-[11px] text-slate-500">{user.especialidadTaller} — {user.ciudadTaller || user.ubicacionTaller}</p>
+                        </div>
+                      ) : user.rol === 'generador_qr' ? (
+                        <div>
+                          <p className="font-bold text-purple-700">{user.razonSocial || 'Empresa No Definida'}</p>
+                          <p className="text-[11px] text-slate-500">Plan: {user.limiteQR} QRs | Tel: {user.telefono || 'N/A'}</p>
+                        </div>
+                      ) : user.rol === 'prevencion_riesgo' || user.rol === 'torre_control' ? (
+                        <div>
+                          <p className="font-bold text-slate-800">{user.razonSocial || 'Operador Institucional'}</p>
+                          <p className="text-[11px] text-slate-500">Tel: {user.telefono || 'N/A'}</p>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-400 italic">Acceso Total Plataforma</span>
+                      )}
+                    </td>
+                    <td className="p-3 text-center">
+                      <div className="flex justify-center gap-1.5">
+                        <button 
+                          onClick={() => editarUsuario(user)} 
+                          className="text-xs font-bold px-2.5 py-1 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100"
+                        >
+                          Editar
+                        </button>
+                        <button 
+                          onClick={() => eliminarUsuario(user.id, user.email)} 
+                          className="text-xs font-bold px-2.5 py-1 bg-rose-50 text-rose-600 rounded-lg hover:bg-rose-100"
+                        >
+                          Borrar
+                        </button>
                       </div>
-                    ) : user.rol === 'generador_qr' ? (
-                      <div className="text-sm">
-                        <p className="font-black text-purple-700">{user.razonSocial || 'Empresa No Definida'}</p>
-                        <p className="text-slate-500 font-medium text-xs">Plan: {user.limiteQR} QRs | Dir: {user.direccion || 'N/A'}</p>
-                        <p className="text-slate-500 font-medium text-xs">Tel: {user.telefono || 'N/A'}</p>
-                      </div>
-                    ) : user.rol === 'prevencion_riesgo' ? (
-                      <div className="text-sm">
-                        <p className="font-black text-amber-700">{user.razonSocial || 'Oficial de Prevención'}</p>
-                        <p className="text-slate-500 font-medium text-xs">Tel: {user.telefono || 'N/A'}</p>
-                      </div>
-                    ) : user.rol === 'torre_control' ? (
-                      <div className="text-sm">
-                        <p className="font-black text-cyan-700">{user.razonSocial || 'Operador Telemático'}</p>
-                        <p className="text-slate-500 font-medium text-xs">Tel: {user.telefono || 'N/A'}</p>
-                      </div>
-                    ) : (
-                      <span className="text-xs text-slate-400 italic">Acceso Total</span>
-                    )}
-                  </td>
-                  <td className="p-4 flex gap-2 justify-center mt-2">
-                    <button onClick={() => editarUsuario(user)} className="text-xs font-bold px-3 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors">Editar</button>
-                    <button onClick={() => eliminarUsuario(user.id, user.email)} className="text-xs font-bold px-3 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors">Borrar</button>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
-        </div>
-
-        <div className="flex flex-col md:hidden gap-4 p-4">
-          {usuariosRegistrados.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-slate-200 p-4 text-slate-400 text-center">Cargando usuarios...</div>
-          ) : (
-            usuariosRegistrados.map((user) => (
-              <div key={user.id} className="bg-white rounded-2xl border border-slate-200 p-4">
-                <div className="flex justify-between items-start gap-3">
-                  <span className="font-black text-slate-800 text-sm break-all">{user.email}</span>
-                  <span className={`text-[10px] uppercase font-black px-2 py-1 rounded-full inline-block ${
-                    user.rol === 'admin' ? 'bg-indigo-100 text-indigo-700' : 
-                    user.rol === 'taller' ? 'bg-blue-100 text-blue-700' :
-                    user.rol === 'prevencion_riesgo' ? 'bg-amber-100 text-amber-800' :
-                    user.rol === 'torre_control' ? 'bg-cyan-100 text-cyan-800' :
-                    'bg-purple-100 text-purple-700'
-                  }`}>
-                    {user.rol === 'prevencion_riesgo' ? 'Prevención' : user.rol === 'torre_control' ? 'Torre de Control' : user.rol}
-                  </span>
-                </div>
-
-                <div className="mt-3 text-sm text-slate-600">
-                  {user.rol === 'taller' ? (
-                    <div>
-                      <p className="font-black text-blue-700">{user.nombreTaller || 'Sin nombre'}</p>
-                      <p className="text-slate-500 font-medium text-xs">{user.especialidadTaller}</p>
-                      <p className="text-slate-500 text-xs">{user.ciudadTaller ? `${user.direccionTaller}, ${user.ciudadTaller}` : user.ubicacionTaller}</p>
-                    </div>
-                  ) : user.rol === 'generador_qr' ? (
-                    <div>
-                      <p className="font-black text-purple-700">{user.razonSocial || 'Empresa No Definida'}</p>
-                      <p className="text-slate-500 font-medium text-xs">Plan: {user.limiteQR} QRs | Dir: {user.direccion || 'N/A'}</p>
-                      <p className="text-slate-500 font-medium text-xs">Tel: {user.telefono || 'N/A'}</p>
-                    </div>
-                  ) : user.rol === 'prevencion_riesgo' ? (
-                    <div>
-                      <p className="font-black text-amber-700">{user.razonSocial || 'Oficial de Prevención'}</p>
-                      <p className="text-slate-500 font-medium text-xs">Tel: {user.telefono || 'N/A'}</p>
-                    </div>
-                  ) : user.rol === 'torre_control' ? (
-                    <div>
-                      <p className="font-black text-cyan-700">{user.razonSocial || 'Operador Telemático'}</p>
-                      <p className="text-slate-500 font-medium text-xs">Tel: {user.telefono || 'N/A'}</p>
-                    </div>
-                  ) : (
-                    <span className="text-xs text-slate-400 italic">Acceso Total</span>
-                  )}
-                </div>
-
-                <div className="mt-4 grid grid-cols-2 gap-2">
-                  <button onClick={() => editarUsuario(user)} className="w-full text-xs font-bold px-3 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors">Editar</button>
-                  <button onClick={() => eliminarUsuario(user.id, user.email)} className="w-full text-xs font-bold px-3 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors">Borrar</button>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
+        </ResponsiveTable>
       </div>
+
     </div>
   );
 }

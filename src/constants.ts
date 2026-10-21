@@ -1,3 +1,5 @@
+import type { Timestamp } from 'firebase/firestore';
+
 export interface Vehiculo {
   id?: string;
   identificador: string;
@@ -88,6 +90,7 @@ export const SAFETY_DOCUMENTS: Record<SafetyDocumentType, SafetyDocumentConfig> 
 
 export interface FirmaDocumento {
   id?: string;
+  patente?: string;
   documentoId: SafetyDocumentType;
   conductorUid: string;
   conductorNombre: string;
@@ -95,6 +98,7 @@ export interface FirmaDocumento {
   fechaLectura: string;
   firmaBase64: string;
   declaracionAceptada: boolean;
+  creadoEn?: Timestamp;
 }
 
 export interface RegistroAlcoholDrogas {
@@ -169,6 +173,7 @@ export const BANCO_PREGUNTAS_EMERGENCIA: PreguntaEmergencia[] = [
 
 export interface EvaluacionEmergenciaRegistro {
   id?: string;
+  patente?: string;
   conductorUid: string;
   conductorNombre: string;
   conductorRut: string;
@@ -183,6 +188,7 @@ export interface EvaluacionEmergenciaRegistro {
   totalPreguntas: number;
   aprobado: boolean;
   firmaBase64: string;
+  creadoEn?: Timestamp;
 }
 
 export interface PuntoGPS {
