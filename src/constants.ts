@@ -106,10 +106,15 @@ export interface RegistroAlcoholDrogas {
   conductorUid: string;
   conductorNombre: string;
   conductorRut: string;
+  patente?: string; // Opcional
   fechaControl: string;
   resultado: 'negativo' | 'positivo' | 'pendiente';
   tipoExamen: 'alcotest' | 'narcotest' | 'laboratorio';
   observaciones: string;
+  fotoCredencialUrl?: string | null;
+  fotoPruebaUrl?: string | null;
+  fotoPruebaExpiraEn?: number; // Timestamp a las 24 horas
+  fechaTimestamp?: number; // Timestamp para controlar el ciclo de 30 + 7 dias
   adjuntosUrls: string[];
   creadoPorUid: string;
   creadoPorNombre: string;
