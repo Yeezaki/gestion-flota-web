@@ -15,6 +15,7 @@ import TabAuditoria from '../components/admin/TabAuditoria';
 import { FormAlcoholDrogas } from '../components/prevencion/FormAlcoholDrogas';
 import { FormEvidenciaProcedimiento } from '../components/prevencion/FormEvidenciaProcedimiento';
 import { TablaBloqueosPVT } from '../components/prevencion/TablaBloqueosPVT';
+import { PlanillaControlesDrogas } from '../components/prevencion/PlanillaControlesDrogas';
 import { ModuloTorreControl } from '../components/torreControl/ModuloTorreControl';
 import DashboardTaller from './DashboardTaller';
 import GeneradorQR from './GeneradorQR';
@@ -70,8 +71,8 @@ export default function DashboardAdmin() {
 
   // Sub-estados internos para Prevencion y Torre
   const [subPestanaPrevencion, setSubPestanaPrevencion] = useState<
-    'bloqueos_pvt' | 'documentos' | 'alcohol' | 'procedimientos' | 'emergencias' | 'nuevo_alcohol' | 'nuevo_procedimiento'
-  >('bloqueos_pvt');
+    'planilla' | 'bloqueos_pvt' | 'documentos' | 'alcohol' | 'procedimientos' | 'emergencias' | 'nuevo_alcohol' | 'nuevo_procedimiento'
+  >('planilla');
 
   const [modoTorre, setModoTorre] = useState<'historial' | 'cargar_gps'>('historial');
   const [modalFirmaPreview, setModalFirmaPreview] = useState<string | null>(null);
@@ -149,7 +150,7 @@ export default function DashboardAdmin() {
       ...datosSinId,
       creadoEn: serverTimestamp()
     });
-    setSubPestanaPrevencion('alcohol');
+    setSubPestanaPrevencion('planilla');
   };
 
   const handleGuardarProcedimiento = async (nuevoRegistro: EvidenciaEvalProcedimiento) => {
@@ -180,7 +181,7 @@ export default function DashboardAdmin() {
   const totalBloqueados = reportesDiarios.filter((r) => r.bloqueado).length;
   const citasPendientes = citasTaller.filter((c) => c.estado === 'pendiente').length;
 
-  // Filtrado de usuarios por rol y busqueda de texto
+  // Filtrado de usuarios por rol y busqueda
   const usuariosFiltrados = usuariosSistema.filter((u) => {
     const rolTexto = (u.rol || '').toLowerCase();
     let cumpleRol = false;
@@ -203,12 +204,12 @@ export default function DashboardAdmin() {
   });
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 antialiased">
+    <div className="min-h-screen bg-slate-50 text-slate-800 antialiased overflow-x-hidden">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 space-y-6">
         
-        {/* Encabezado General */}
+        {/* Encabezado General Responsivo */}
         <header className="bg-white border border-slate-200/90 rounded-3xl p-4 sm:p-6 shadow-sm">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
             <div>
               <span className="text-[10px] font-black uppercase tracking-wider text-blue-700 bg-blue-50 px-3 py-1 rounded-full border border-blue-200">
                 Consola Central Multi-Rol
@@ -221,42 +222,44 @@ export default function DashboardAdmin() {
               </p>
             </div>
 
-            {/* Busqueda y Selector */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full lg:max-w-xl">
-              <input
-                type="text"
-                placeholder="Buscar patente (Ej: AB12)..."
-                value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
-                className="w-full px-3.5 py-2.5 sm:py-3 border border-slate-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50/50 hover:bg-white text-xs sm:text-sm transition-all"
-              />
+            {/* Buscador, Filtro y Acciones organizados sin desborde */}
+            <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5 w-full xl:w-auto">
+              <div className="flex-1 sm:min-w-[200px]">
+                <input
+                  type="text"
+                  placeholder="Buscar patente (Ej: AB12)..."
+                  value={busqueda}
+                  onChange={(e) => setBusqueda(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50/50 hover:bg-white text-xs sm:text-sm transition-all"
+                />
+              </div>
+
               <select
                 value={filtroTipoVehiculo}
                 onChange={(e) => setFiltroTipoVehiculo(e.target.value)}
-                className="py-2.5 sm:py-3 px-3 border border-slate-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white font-semibold text-xs sm:text-sm text-slate-700 shadow-sm cursor-pointer"
+                className="py-2.5 px-3 border border-slate-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white font-semibold text-xs sm:text-sm text-slate-700 shadow-sm cursor-pointer shrink-0"
               >
                 <option value="todos">Todos los Tipos</option>
                 <option value="Tracto camión">Tracto camion</option>
                 <option value="Semirremolque">Semirremolque</option>
                 <option value="Camioneta">Camioneta</option>
               </select>
-            </div>
 
-            {/* Botones de Cabecera */}
-            <div className="flex items-center gap-2.5 w-full lg:w-auto">
-              <Link
-                to="/generador"
-                className="flex-1 lg:flex-none text-center bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white font-bold py-2.5 sm:py-3 px-4 rounded-2xl transition-all shadow-sm text-xs sm:text-sm"
-              >
-                + Agregar Vehiculo
-              </Link>
-              <button
-                type="button"
-                onClick={manejarCerrarSesion}
-                className="flex-1 lg:flex-none text-center bg-slate-100 hover:bg-slate-200 active:scale-[0.98] text-slate-700 font-bold py-2.5 sm:py-3 px-4 rounded-2xl transition-all text-xs sm:text-sm"
-              >
-                Salir
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                <Link
+                  to="/generador"
+                  className="flex-1 sm:flex-none text-center bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white font-bold py-2.5 px-4 rounded-2xl transition-all shadow-sm text-xs sm:text-sm whitespace-nowrap"
+                >
+                  + Agregar Vehiculo
+                </Link>
+                <button
+                  type="button"
+                  onClick={manejarCerrarSesion}
+                  className="flex-1 sm:flex-none text-center bg-slate-100 hover:bg-slate-200 active:scale-[0.98] text-slate-700 font-bold py-2.5 px-4 rounded-2xl transition-all text-xs sm:text-sm whitespace-nowrap"
+                >
+                  Salir
+                </button>
+              </div>
             </div>
           </div>
         </header>
@@ -292,9 +295,9 @@ export default function DashboardAdmin() {
           </div>
         </section>
 
-        {/* Barra de Pestanas con Navegacion Adaptativa */}
+        {/* Barra de Pestanas con Desplazamiento Tactil Fluido */}
         <nav aria-label="Navegacion principal" className="bg-white p-2 rounded-2xl border border-slate-200/90 shadow-sm">
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-slate-300 touch-pan-x">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scroll-touch">
             <button
               type="button"
               onClick={() => setPestanaActiva('reportes')}
@@ -379,7 +382,7 @@ export default function DashboardAdmin() {
         </nav>
 
         {/* Contenido Principal */}
-        <main className="space-y-6">
+        <main className="space-y-6 w-full">
           {pestanaActiva === 'reportes' && <TabReportes busqueda={busqueda} filtroTipoVehiculo={filtroTipoVehiculo} />}
           {pestanaActiva === 'vehiculos' && <TabFlota busqueda={busqueda} filtroTipoVehiculo={filtroTipoVehiculo} />}
           {pestanaActiva === 'qrs' && <TabQRs busqueda={busqueda} filtroTipoVehiculo={filtroTipoVehiculo} />}
@@ -671,7 +674,7 @@ export default function DashboardAdmin() {
                           Vista de Prevencion de Riesgos y Seguridad
                         </h3>
                         <p className="text-xs text-slate-500">
-                          Fatiga PVT, alcotest, narcotest, procedimientos y firmas electronicas.
+                          Planilla de drogas (30d + Excel), reposos PVT, alcotest, narcotest y firmas.
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
@@ -692,7 +695,16 @@ export default function DashboardAdmin() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+                    <div className="flex items-center gap-2 overflow-x-auto pb-1 scroll-touch">
+                      <button
+                        type="button"
+                        onClick={() => setSubPestanaPrevencion('planilla')}
+                        className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+                          subPestanaPrevencion === 'planilla' ? 'bg-amber-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                      >
+                        Planilla Tests (30d + Excel)
+                      </button>
                       <button
                         type="button"
                         onClick={() => setSubPestanaPrevencion('bloqueos_pvt')}
@@ -740,6 +752,10 @@ export default function DashboardAdmin() {
                       </button>
                     </div>
                   </div>
+
+                  {subPestanaPrevencion === 'planilla' && (
+                    <PlanillaControlesDrogas controles={registrosAlcohol} />
+                  )}
 
                   {subPestanaPrevencion === 'bloqueos_pvt' && (
                     <TablaBloqueosPVT permitirLiberar={true} />
@@ -1006,6 +1022,6 @@ export default function DashboardAdmin() {
         )}
 
       </div>
-    </div>
+    </div>  
   );
 }

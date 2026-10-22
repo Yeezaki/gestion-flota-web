@@ -13,13 +13,12 @@ type TabQRsProps = {
 
 export default function TabQRs({ busqueda, filtroTipoVehiculo }: TabQRsProps) {
   const [qrsGuardados, setQrsGuardados] = useState<any[]>([]);
-  const [vehiculos, setVehiculos] = useState<any[]>([]); // Para validar huérfanos/reconstrucción
+  const [vehiculos, setVehiculos] = useState<any[]>([]);
   const [limitesQR, setLimitesQR] = useState<Record<string, number>>({});
   const [generandoPdf, setGenerandoPdf] = useState<string | null>(null);
 
   const cargarDatos = async () => {
     try {
-      // 1. Cargar QRs
       const qQR = query(collection(db, 'qrs_guardados'), orderBy('fechaRegistro', 'desc'));
       const snapQR = await getDocs(qQR);
       setQrsGuardados(snapQR.docs.map(doc => {
@@ -28,7 +27,6 @@ export default function TabQRs({ busqueda, filtroTipoVehiculo }: TabQRsProps) {
         return { id: doc.id, ...data };
       }));
 
-      // 2. Cargar Vehículos (para poder comparar y depurar)
       const snapVehiculos = await getDocs(collection(db, 'vehiculos'));
       setVehiculos(snapVehiculos.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     } catch (error) {
@@ -151,48 +149,55 @@ export default function TabQRs({ busqueda, filtroTipoVehiculo }: TabQRsProps) {
   }, {});
 
   return (
-    <div className="space-y-12">
-      <div className="flex justify-end gap-3">
-        <button onClick={depurarQRsHuerfanos} className="text-xs bg-rose-50 text-rose-600 font-bold px-3 py-2 rounded-xl border border-rose-200 hover:bg-rose-100 transition-colors">
+    <div className="space-y-6 w-full max-w-full">
+      {/* Botones de acción superiores alineados y responsivos */}
+      <div className="flex flex-wrap items-center justify-end gap-2.5">
+        <button
+          onClick={depurarQRsHuerfanos}
+          className="text-xs bg-rose-50 text-rose-600 font-bold px-3.5 py-2 rounded-xl border border-rose-200 hover:bg-rose-100 transition-colors shadow-sm"
+        >
           Depurar QRs Huérfanos
         </button>
-        <button onClick={reconstruirQRsDesdeFlota} className="text-xs bg-indigo-50 text-indigo-600 font-bold px-3.5 py-2 rounded-xl border border-indigo-200 hover:bg-indigo-100 transition-colors">
+        <button
+          onClick={reconstruirQRsDesdeFlota}
+          className="text-xs bg-indigo-50 text-indigo-600 font-bold px-4 py-2 rounded-xl border border-indigo-200 hover:bg-indigo-100 transition-colors shadow-sm"
+        >
           Reconstruir QRs de Flota
         </button>
       </div>
 
       {Object.keys(qrsAgrupadosPorUsuario).length === 0 ? (
-        <div className="bg-white p-12 rounded-3xl shadow-lg text-center border border-slate-100">
-          <p className="text-slate-500 text-lg">No se encontraron códigos QR guardados.</p>
+        <div className="bg-white p-8 sm:p-12 rounded-3xl shadow-sm text-center border border-slate-200">
+          <p className="text-slate-500 text-sm sm:text-base">No se encontraron códigos QR guardados.</p>
         </div>
       ) : (
         Object.entries(qrsAgrupadosPorUsuario).map(([grupo, dataGrupo]: any) => {
           const limiteActual = limitesQR[grupo] || 6;
           return (
-            <div key={grupo} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-              <div className="border-b border-slate-100 pb-4 mb-6">
-                <h2 className="text-xl font-black text-slate-800">{grupo}</h2>
-                <p className="text-sm font-medium text-slate-500 mt-1">{dataGrupo.detalles}</p>
-                <div className="inline-block bg-purple-100 text-purple-700 text-xs font-bold px-3 py-1 rounded-lg mt-2">
+            <div key={grupo} className="bg-white p-4 sm:p-6 rounded-3xl shadow-sm border border-slate-200 space-y-4">
+              <div className="border-b border-slate-100 pb-4">
+                <h2 className="text-lg sm:text-xl font-black text-slate-800">{grupo}</h2>
+                <p className="text-xs sm:text-sm font-medium text-slate-500 mt-0.5">{dataGrupo.detalles}</p>
+                <div className="inline-block bg-purple-100 text-purple-700 text-[11px] font-bold px-3 py-1 rounded-lg mt-2">
                   Total Creados: {dataGrupo.qrs.length}
                 </div>
               </div>
               
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
                 {dataGrupo.qrs.slice(0, limiteActual).map((qr: any) => {
                   const urlCorregida = qr.url?.replace(/http:\/\/(localhost|127\.0\.0\.1)(:\d+)?/g, 'https://gestion-flota-web.vercel.app') || '';
                   return (
-                    <div key={qr.id} className="flex flex-col gap-2 relative bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                    <div key={qr.id} className="flex flex-col justify-between bg-slate-50 p-4 rounded-2xl border border-slate-200 shadow-sm hover:border-slate-300 transition-all">
                       <div className="flex flex-col items-center">
-                        <h3 className="text-2xl font-black text-slate-800 tracking-widest">{qr.patente}</h3>
-                        <p className="text-[10px] text-slate-500 font-bold uppercase mb-4">{qr.tipo || 'Control de Flota'}</p>
-                        <div className="bg-white p-2 rounded-xl border-2 border-slate-200 mb-4 shadow-sm">
-                          <QRCodeSVG value={urlCorregida} size={100} level="H" includeMargin={false} />
+                        <h3 className="text-xl sm:text-2xl font-black text-slate-800 tracking-widest">{qr.patente}</h3>
+                        <p className="text-[10px] text-slate-500 font-bold uppercase mb-3">{qr.tipo || 'Control de Flota'}</p>
+                        <div className="bg-white p-2.5 rounded-2xl border border-slate-200 mb-4 shadow-sm flex items-center justify-center">
+                          <QRCodeSVG value={urlCorregida} size={110} level="H" includeMargin={false} />
                         </div>
                       </div>
 
-                      {/* Elemento oculto para PDF */}
-                      <div style={{ position: 'absolute', top: 0, left: 0, opacity: 0, pointerEvents: 'none', zIndex: -50 }}>
+                      {/* Elemento oculto para PDF: se usa fixed fuera de pantalla para no alterar el scroll ni el DOM */}
+                      <div style={{ position: 'fixed', left: '-9999px', top: 0, pointerEvents: 'none' }}>
                         <div id={`tarjeta-pdf-${qr.patente}`} className="bg-white p-8 flex flex-col items-center justify-center" style={{ width: '400px', height: '600px', backgroundColor: 'white' }}>
                           <img src={LOGO_BASE64} alt="Logo Empresa" style={{ height: '90px', objectFit: 'contain', marginBottom: '30px' }} />
                           <h2 className="text-5xl font-black text-slate-800 mb-2 tracking-widest">{qr.patente}</h2>
@@ -204,11 +209,22 @@ export default function TabQRs({ busqueda, filtroTipoVehiculo }: TabQRsProps) {
                         </div>
                       </div>
 
-                      <div className="flex gap-2 w-full mt-2 relative z-10">
-                        <button onClick={() => descargarPDF(qr.patente)} disabled={generandoPdf === qr.patente} className="flex-1 bg-slate-800 text-white font-bold py-2 rounded-xl hover:bg-slate-900 transition-colors shadow-sm text-xs">
-                          {generandoPdf === qr.patente ? '...' : 'Descargar'}
+                      <div className="flex gap-2 w-full pt-1">
+                        <button
+                          onClick={() => descargarPDF(qr.patente)}
+                          disabled={generandoPdf === qr.patente}
+                          className="flex-1 bg-slate-800 hover:bg-slate-900 text-white font-bold py-2 rounded-xl transition-colors shadow-sm text-xs text-center"
+                        >
+                          {generandoPdf === qr.patente ? 'Generando...' : 'Descargar'}
                         </button>
-                        <a href={urlCorregida} target="_blank" rel="noreferrer" className="flex-1 text-center bg-blue-50 text-blue-600 font-bold py-2 rounded-xl hover:bg-blue-100 transition-colors text-xs flex items-center justify-center">Probar</a>
+                        <a
+                          href={urlCorregida}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex-1 text-center bg-blue-50 text-blue-600 hover:bg-blue-100 font-bold py-2 rounded-xl transition-colors text-xs flex items-center justify-center"
+                        >
+                          Probar
+                        </a>
                       </div>
                     </div>
                   );
@@ -216,9 +232,12 @@ export default function TabQRs({ busqueda, filtroTipoVehiculo }: TabQRsProps) {
               </div>
 
               {dataGrupo.qrs.length > limiteActual && (
-                <div className="mt-6 text-center">
-                  <button onClick={() => setLimitesQR(prev => ({ ...prev, [grupo]: limiteActual + 6 }))} className="px-8 py-3 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl shadow-sm hover:bg-slate-100 transition-colors">
-                    Mostrar más
+                <div className="pt-2 text-center">
+                  <button
+                    onClick={() => setLimitesQR(prev => ({ ...prev, [grupo]: limiteActual + 6 }))}
+                    className="px-6 py-2.5 bg-white border border-slate-300 text-slate-700 font-bold text-xs rounded-xl shadow-sm hover:bg-slate-50 transition-colors"
+                  >
+                    Mostrar más ({dataGrupo.qrs.length - limiteActual} restantes)
                   </button>
                 </div>
               )}

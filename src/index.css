@@ -3,17 +3,18 @@
 html, body {
   overflow-x: hidden;
   -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
+  touch-action: pan-y pinch-zoom;
+  height: 100%;
 }
 
-/* Desplazamiento táctil fluido para tablets y móviles */
+/* Desplazamiento táctil horizontal fluido */
 .scroll-touch {
   -webkit-overflow-scrolling: touch;
   touch-action: pan-x;
   scrollbar-width: thin;
 }
 
-/* Previene que la pantalla se mueva mientras se dibuja la firma o se hacen tests */
+/* Previene que la pantalla se mueva solo mientras se dibuja la firma */
 .touch-draw {
   touch-action: none !important;
   user-select: none;
