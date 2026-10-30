@@ -282,7 +282,7 @@ export default function VistaConductor() {
           setKilometrajeAnterior(kmRealAnterior);
           
           // Se usa la función callback de setKilometraje para asegurar que toma el valor actual
-          setKilometraje((prev) => prev ? prev : (kmRealAnterior > 0 ? kmRealAnterior.toString() : ''));
+          setKilometraje((prev: string) => prev ? prev : (kmRealAnterior > 0 ? kmRealAnterior.toString() : ''));
         } else {
           console.warn(`No se encontró el vehículo con patente ${patenteValida}`);
         }
