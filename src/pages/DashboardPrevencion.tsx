@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
-import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, updateDoc, deleteDoc, where } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { useNavigate } from 'react-router-dom';
 import { db, auth } from '../lib/firebase';
 import { FormAlcoholDrogas } from '../components/prevencion/FormAlcoholDrogas';
 import { FormEvidenciaProcedimiento } from '../components/prevencion/FormEvidenciaProcedimiento';
-import { TablaBloqueosPVT } from '../components/prevencion/TablaBloqueosPVT';
+import { PlanillaControlesDrogas } from '../components/prevencion/PlanillaControlesDrogas';
 import { ResponsiveLayout } from '../components/common/ResponsiveLayout';
+import { liberarBloqueoPVT } from '../services/pvtLockService';
 import type {
   EvidenciaEvalProcedimiento,
   EvaluacionEmergenciaRegistro,
@@ -20,11 +21,35 @@ interface PreguntaPrevencionAdmin {
   activa: boolean;
 }
 
+interface CitacionControlDroga {
+  id: string;
+  conductorNombre?: string;
+  conductorRut?: string;
+  patente?: string;
+  estado?: string;
+  fechaSeleccion?: any;
+  tipoSeleccion?: string;
+}
+
+interface ItemBloqueoUnificado {
+  id: string;
+  rut: string;
+  nombre: string;
+  patente: string;
+  nivelRiesgo: string;
+  minutosEspera: number;
+  bloqueadoHasta: number;
+  origen: 'bloqueos_pvt' | 'reportes';
+  activo: boolean;
+}
+
 export default function DashboardPrevencion() {
   const navigate = useNavigate();
   const [seccion, setSeccion] = useState<'kpi' | 'planilla' | 'bloqueos_pvt' | 'preguntas' | 'alcohol' | 'procedimiento'>('kpi');
 
   const [alcoholList, setAlcoholList] = useState<RegistroAlcoholDrogas[]>([]);
+  const [citadosPendientes, setCitadosPendientes] = useState<CitacionControlDroga[]>([]);
+  const [bloqueosUnificados, setBloqueosUnificados] = useState<ItemBloqueoUnificado[]>([]);
   const [procList, setProcList] = useState<EvidenciaEvalProcedimiento[]>([]);
   const [emergenciasList, setEmergenciasList] = useState<EvaluacionEmergenciaRegistro[]>([]);
   const [preguntasPrevencion, setPreguntasPrevencion] = useState<PreguntaPrevencionAdmin[]>([]);
@@ -32,17 +57,118 @@ export default function DashboardPrevencion() {
   const [nuevaPreguntaTexto, setNuevaPreguntaTexto] = useState('');
   const [nuevaPreguntaCritica, setNuevaPreguntaCritica] = useState(true);
   const [guardandoPregunta, setGuardandoPregunta] = useState(false);
-  const [modalFoto, setModalFoto] = useState<{ url: string; titulo: string } | null>(null);
 
-  const ahora = Date.now();
-  const MILIS_DIA = 24 * 60 * 60 * 1000;
-  const RETENCION_VISTA_DIAS = 30;
-  const GRACIA_DESCARGA_DIAS = 7;
-  const LIMITE_TOTAL_DIAS = RETENCION_VISTA_DIAS + GRACIA_DESCARGA_DIAS; // 37 días
+  const [ahora, setAhora] = useState<number>(Date.now());
 
   useEffect(() => {
-    const unsubA = onSnapshot(query(collection(db, 'controles_alcohol_drogas'), orderBy('fechaControl', 'desc')), (s) => {
-      setAlcoholList(s.docs.map((d) => ({ id: d.id, ...d.data() } as RegistroAlcoholDrogas)));
+    const timer = setInterval(() => {
+      setAhora(Date.now());
+    }, 5000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    // 1. Escuchar citaciones de Drogas y Controles completados
+    const unsubControles = onSnapshot(collection(db, 'controles_alcohol_drogas'), (s) => {
+      const docs = s.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+      const pendientes = docs
+        .filter((d: any) => d.estado === 'pendiente' || (!d.resultado && d.fechaSeleccion))
+        .sort((a: any, b: any) => {
+          const tA = a.fechaSeleccion?.toMillis?.() || 0;
+          const tB = b.fechaSeleccion?.toMillis?.() || 0;
+          return tB - tA;
+        }) as CitacionControlDroga[];
+      setCitadosPendientes(pendientes);
+
+      const completados = docs
+        .filter((d: any) => d.estado !== 'pendiente' && d.resultado)
+        .sort((a: any, b: any) => {
+          const tA = a.fechaTimestamp || (a.fechaControl ? new Date(a.fechaControl).getTime() : 0);
+          const tB = b.fechaTimestamp || (b.fechaControl ? new Date(b.fechaControl).getTime() : 0);
+          return tB - tA;
+        }) as RegistroAlcoholDrogas[];
+      setAlcoholList(completados);
+    });
+
+    // 2. Escuchar bloqueos PVT directos y reportes con fallo cognitivo para unificarlos
+    let bloqueosDirectos: ItemBloqueoUnificado[] = [];
+    let reportesBloqueados: ItemBloqueoUnificado[] = [];
+
+    const combinarListas = () => {
+      const mapa = new Map<string, ItemBloqueoUnificado>();
+      [...bloqueosDirectos, ...reportesBloqueados].forEach((item) => {
+        const clave = item.rut || item.id;
+        if (!mapa.has(clave)) {
+          mapa.set(clave, item);
+        } else {
+          // Mantener el que tenga mayor tiempo de bloqueo
+          const existente = mapa.get(clave)!;
+          if (item.bloqueadoHasta > existente.bloqueadoHasta) {
+            mapa.set(clave, item);
+          }
+        }
+      });
+      setBloqueosUnificados(Array.from(mapa.values()));
+    };
+
+    const unsubBloqueos = onSnapshot(collection(db, 'bloqueos_pvt'), (s) => {
+      bloqueosDirectos = s.docs.map((d) => {
+        const data = d.data();
+        const rut = data.rut || data.conductorRut || d.id;
+        const nombre = data.nombreConductor || data.conductorNombre || data.nombre || 'Conductor';
+        const patente = data.patente || 'N/A';
+        const nivelRiesgo = data.nivelRiesgo || data.rangoRiesgo || 'medio';
+        const minutosEspera = Number(data.tiempoEsperaMinutos || data.minutosEsperaPVT || 15);
+        const hasta = typeof data.bloqueadoHasta === 'number'
+          ? data.bloqueadoHasta
+          : data.bloqueadoHasta?.toMillis?.() || (Date.now() + minutosEspera * 60000);
+
+        return {
+          id: d.id,
+          rut,
+          nombre,
+          patente,
+          nivelRiesgo,
+          minutosEspera,
+          bloqueadoHasta: hasta,
+          origen: 'bloqueos_pvt' as const,
+          activo: data.activo !== false
+        };
+      });
+      combinarListas();
+    });
+
+    const qReportesPVT = query(
+      collection(db, 'reportes'),
+      where('bloqueoPorTestCognitivo', '==', true),
+      orderBy('fecha', 'desc')
+    );
+
+    const unsubReportesPVT = onSnapshot(qReportesPVT, (s) => {
+      reportesBloqueados = s.docs.map((d) => {
+        const data = d.data();
+        const rut = data.conductorRut || 'Sin RUT';
+        const nombre = data.conductorNombre || 'Conductor';
+        const patente = data.vehiculoId || 'N/A';
+        const nivelRiesgo = data.nivelRiesgoPVT || 'medio';
+        const minutos = Number(data.minutosEsperaPVT || 15);
+        const fechaBase = data.fecha?.toMillis?.() || Date.now();
+        const hasta = fechaBase + (minutos * 60 * 1000);
+
+        return {
+          id: d.id,
+          rut,
+          nombre,
+          patente,
+          nivelRiesgo,
+          minutosEspera: minutos,
+          bloqueadoHasta: hasta,
+          origen: 'reportes' as const,
+          activo: true
+        };
+      });
+      combinarListas();
     });
 
     const unsubP = onSnapshot(query(collection(db, 'evaluaciones_procedimiento'), orderBy('fechaEvaluacion', 'desc')), (s) => {
@@ -58,12 +184,52 @@ export default function DashboardPrevencion() {
     });
 
     return () => {
-      unsubA();
+      unsubControles();
+      unsubBloqueos();
+      unsubReportesPVT();
       unsubP();
       unsubE();
       unsubPreguntas();
     };
   }, []);
+
+  const conductoresEnReposoActivo = bloqueosUnificados.filter((item) => {
+    return item.activo && item.bloqueadoHasta > ahora;
+  });
+
+  const handleLiberarPVT = async (item: ItemBloqueoUnificado) => {
+    const confirmar = window.confirm(
+      `¿Desea levantar anticipadamente el reposo obligatorio para ${item.nombre} (${item.rut})?`
+    );
+    if (!confirmar) return;
+
+    try {
+      if (item.origen === 'bloqueos_pvt') {
+        await liberarBloqueoPVT(item.rut);
+      } else {
+        await updateDoc(doc(db, 'reportes', item.id), {
+          bloqueoPorTestCognitivo: false,
+          liberadoPorPrevencion: true
+        });
+      }
+
+      await addDoc(collection(db, 'historial_acciones'), {
+        usuario: auth.currentUser?.email || 'Prevencionista',
+        accion: 'LIBERACION_PVT_MANUAL',
+        detalles: `Prevención levantó el reposo de fatiga a ${item.nombre} (${item.rut})`,
+        fecha: serverTimestamp()
+      });
+    } catch (error) {
+      console.error('Error al liberar bloqueo:', error);
+      alert('No se pudo levantar el bloqueo. Verifique su conexión.');
+    }
+  };
+
+  const handleEliminarCitacion = async (id: string) => {
+    if (window.confirm('¿Desea descartar esta citación de control?')) {
+      await deleteDoc(doc(db, 'controles_alcohol_drogas', id));
+    }
+  };
 
   const handleCrearPregunta = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -99,169 +265,178 @@ export default function DashboardPrevencion() {
     navigate('/login');
   };
 
-  // Filtrado de retención para la planilla de 30 días + 7 días de gracia (37 días totales)
-  const controlesVigentes = alcoholList.filter((c) => {
-    const fechaBase = c.fechaTimestamp || new Date(c.fechaControl).getTime() || ahora;
-    const diasTranscurridos = (ahora - fechaBase) / MILIS_DIA;
-    return diasTranscurridos <= LIMITE_TOTAL_DIAS;
-  });
-
-  const exportarPlanillaExcel = () => {
-    if (controlesVigentes.length === 0) {
-      alert('No hay registros disponibles para exportar.');
-      return;
+  const getBadgesColor = (nivel: string) => {
+    switch ((nivel || '').toLowerCase()) {
+      case 'alto':
+        return 'bg-red-100 text-red-800 border-red-300';
+      case 'medio-alto':
+      case 'medio_alto':
+        return 'bg-orange-100 text-orange-800 border-orange-300';
+      case 'medio':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-300';
+      default:
+        return 'bg-neutral-100 text-neutral-800 border-neutral-300';
     }
-
-    const encabezados = [
-      'Conductor',
-      'RUT',
-      'Patente',
-      'Tipo Examen',
-      'Resultado',
-      'Fecha Control',
-      'Dias Restantes Descarga',
-      'Observaciones',
-      'Evaluador'
-    ];
-
-    const filas = controlesVigentes.map((c) => {
-      const fechaBase = c.fechaTimestamp || new Date(c.fechaControl).getTime() || ahora;
-      const diasTranscurridos = Math.floor((ahora - fechaBase) / MILIS_DIA);
-      const diasRestantesDescarga = Math.max(0, LIMITE_TOTAL_DIAS - diasTranscurridos);
-
-      return [
-        `"${c.conductorNombre}"`,
-        `"${c.conductorRut}"`,
-        `"${c.patente || 'N/A'}"`,
-        `"${c.tipoExamen.toUpperCase()}"`,
-        `"${c.resultado.toUpperCase()}"`,
-        `"${new Date(c.fechaControl).toLocaleString('es-CL')}"`,
-        `"${diasRestantesDescarga} dias"`,
-        `"${(c.observaciones || '').replace(/"/g, '""')}"`,
-        `"${c.creadoPorNombre}"`
-      ].join(';');
-    });
-
-    const contenidoCSV = '\uFEFF' + [encabezados.join(';'), ...filas].join('\r\n');
-    const blob = new Blob([contenidoCSV], { type: 'application/vnd.ms-excel;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `Planilla_Controles_Drogas_Alcohol_${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
   };
 
-  const renderTablaPlanilla = () => (
-    <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-sm space-y-4">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-100 pb-3">
+  const renderTablaCitados = () => (
+    <div className="bg-white rounded-2xl border border-amber-300 p-4 sm:p-6 shadow-sm space-y-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-amber-100 pb-3">
         <div>
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">
-            Planilla de Evaluaciones Realizadas
-          </h3>
-          <p className="text-[11px] text-slate-500 mt-0.5">
-            Retención de 30 días activa + 7 días para descarga por Excel. Foto de prueba visible por 24 horas.
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-amber-900">
+              Conductores Citados a Control de Alcohol y Drogas
+            </h3>
+          </div>
+          <p className="text-[11px] text-amber-700 mt-0.5">
+            Conductores seleccionados en inicio de sesión que deben acudir a toma de muestra.
           </p>
         </div>
         <button
           type="button"
-          onClick={exportarPlanillaExcel}
-          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all flex items-center gap-2 self-end sm:self-auto"
+          onClick={() => setSeccion('alcohol')}
+          className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-          Descargar Planilla Excel
+          + Registrar Control
         </button>
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-slate-200">
-        <table className="w-full text-left text-xs min-w-[750px]">
+        <table className="w-full text-left text-xs min-w-[650px]">
+          <thead className="bg-amber-50 text-amber-900 uppercase text-[10px] tracking-wider">
+            <tr>
+              <th className="p-3">Conductor</th>
+              <th className="p-3">RUT</th>
+              <th className="p-3">Patente</th>
+              <th className="p-3">Fecha Citación</th>
+              <th className="p-3">Motivo</th>
+              <th className="p-3 text-center">Acción</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {citadosPendientes.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="p-5 text-center text-slate-400 font-medium">
+                  No hay conductores pendientes de control en este momento.
+                </td>
+              </tr>
+            ) : (
+              citadosPendientes.map((item) => {
+                const fechaTexto = item.fechaSeleccion?.toDate
+                  ? item.fechaSeleccion.toDate().toLocaleString('es-CL')
+                  : 'Reciente';
+
+                return (
+                  <tr key={item.id} className="hover:bg-amber-50/40">
+                    <td className="p-3 font-bold text-slate-800">{item.conductorNombre || 'Conductor'}</td>
+                    <td className="p-3 font-mono">{item.conductorRut || 'N/A'}</td>
+                    <td className="p-3 font-mono text-slate-700">{item.patente || 'N/A'}</td>
+                    <td className="p-3 text-slate-600">{fechaTexto}</td>
+                    <td className="p-3">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-amber-100 text-amber-800 border border-amber-200">
+                        {item.tipoSeleccion || 'Obligatorio / Pruebas'}
+                      </span>
+                    </td>
+                    <td className="p-3 text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSeccion('alcohol')}
+                          className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-[11px] transition-colors"
+                        >
+                          Aplicar Test
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleEliminarCitacion(item.id)}
+                          className="px-2 py-1 text-slate-400 hover:text-rose-600 text-[11px] font-semibold"
+                        >
+                          Descartar
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  const renderTablaPVT = () => (
+    <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-sm space-y-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-100 pb-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+              Conductores en Reposo por Fatiga (Test PVT Fallido)
+            </h3>
+          </div>
+          <p className="text-[11px] text-slate-500 mt-0.5">
+            Conductores restringidos por evaluación psicomotriz con tiempo de reposo reglamentario en curso.
+          </p>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto rounded-xl border border-slate-200">
+        <table className="w-full text-left text-xs min-w-[700px]">
           <thead className="bg-slate-100 text-slate-700 uppercase text-[10px] tracking-wider">
             <tr>
               <th className="p-3">Conductor</th>
               <th className="p-3">RUT</th>
               <th className="p-3">Patente</th>
-              <th className="p-3">Tipo / Resultado</th>
-              <th className="p-3">Fecha Control</th>
-              <th className="p-3 text-center">Credencial</th>
-              <th className="p-3 text-center">Foto Prueba (24h)</th>
-              <th className="p-3 text-center">Vigencia Registro</th>
+              <th className="p-3">Nivel Riesgo</th>
+              <th className="p-3">Tiempo Total</th>
+              <th className="p-3 text-center">Estado / Restante</th>
+              <th className="p-3 text-center">Acción</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {controlesVigentes.length === 0 ? (
+            {bloqueosUnificados.length === 0 ? (
               <tr>
-                <td colSpan={8} className="p-6 text-center text-slate-400 font-medium">
-                  No hay conductores registrados dentro del periodo activo de 30 + 7 días.
+                <td colSpan={7} className="p-6 text-center text-slate-400 font-medium">
+                  No hay conductores en reposo por PVT actualmente.
                 </td>
               </tr>
             ) : (
-              controlesVigentes.map((item) => {
-                const fechaBase = item.fechaTimestamp || new Date(item.fechaControl).getTime() || ahora;
-                const diasTranscurridos = Math.floor((ahora - fechaBase) / MILIS_DIA);
-                const enPeriodoGracia = diasTranscurridos > RETENCION_VISTA_DIAS;
-                const pruebaVencida24h = item.fotoPruebaExpiraEn ? ahora > item.fotoPruebaExpiraEn : false;
+              bloqueosUnificados.map((item) => {
+                const minutosRestantes = Math.max(0, Math.ceil((item.bloqueadoHasta - ahora) / (1000 * 60)));
+                const enReposo = item.activo && minutosRestantes > 0;
 
                 return (
                   <tr key={item.id} className="hover:bg-slate-50">
-                    <td className="p-3 font-bold text-slate-800">{item.conductorNombre}</td>
-                    <td className="p-3 font-mono">{item.conductorRut}</td>
-                    <td className="p-3 font-mono text-slate-600">{item.patente || 'N/A'}</td>
+                    <td className="p-3 font-bold text-slate-800">{item.nombre}</td>
+                    <td className="p-3 font-mono">{item.rut}</td>
+                    <td className="p-3 font-mono text-slate-600">{item.patente}</td>
                     <td className="p-3">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                        item.resultado === 'negativo' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
-                      }`}>
-                        {item.tipoExamen}: {item.resultado}
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${getBadgesColor(item.nivelRiesgo)}`}>
+                        {item.nivelRiesgo}
                       </span>
                     </td>
-                    <td className="p-3 text-slate-500">
-                      {new Date(item.fechaControl).toLocaleDateString('es-CL')}
-                    </td>
+                    <td className="p-3 text-slate-600">{item.minutosEspera} min</td>
                     <td className="p-3 text-center">
-                      {item.fotoCredencialUrl ? (
-                        <button
-                          type="button"
-                          onClick={() => setModalFoto({ url: item.fotoCredencialUrl!, titulo: `Credencial - ${item.conductorNombre}` })}
-                          className="text-amber-600 hover:underline font-bold text-[11px]"
-                        >
-                          Ver
-                        </button>
-                      ) : (
-                        <span className="text-slate-400">Sin foto</span>
-                      )}
-                    </td>
-                    <td className="p-3 text-center">
-                      {item.fotoPruebaUrl ? (
-                        pruebaVencida24h ? (
-                          <span className="text-[10px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
-                            Expirada (&gt;24h)
-                          </span>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setModalFoto({ url: item.fotoPruebaUrl!, titulo: `Prueba Reactiva - ${item.conductorNombre}` })}
-                            className="text-blue-600 hover:underline font-bold text-[11px]"
-                          >
-                            Ver Prueba
-                          </button>
-                        )
-                      ) : (
-                        <span className="text-slate-400">Sin foto</span>
-                      )}
-                    </td>
-                    <td className="p-3 text-center">
-                      {enPeriodoGracia ? (
-                        <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded text-[10px] font-bold">
-                          Gracia ({LIMITE_TOTAL_DIAS - diasTranscurridos}d descarga)
+                      {enReposo ? (
+                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold border bg-rose-100 text-rose-800 border-rose-300">
+                          En Reposo ({minutosRestantes} min)
                         </span>
                       ) : (
-                        <span className="text-slate-500 font-medium text-[11px]">
-                          {RETENCION_VISTA_DIAS - diasTranscurridos} días activos
+                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold border bg-emerald-100 text-emerald-800 border-emerald-300">
+                          Reposo Cumplido
                         </span>
                       )}
+                    </td>
+                    <td className="p-3 text-center">
+                      <button
+                        type="button"
+                        onClick={() => handleLiberarPVT(item)}
+                        className="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs px-2.5 py-1 rounded-lg transition-colors font-bold"
+                      >
+                        Liberar
+                      </button>
                     </td>
                   </tr>
                 );
@@ -288,7 +463,6 @@ export default function DashboardPrevencion() {
         </button>
       }
     >
-      {/* Navegación horizontal táctil de submódulos */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2 scroll-touch">
         <button
           type="button"
@@ -360,37 +534,68 @@ export default function DashboardPrevencion() {
 
       {seccion === 'kpi' && (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-              <span className="text-[11px] font-bold text-slate-500 uppercase">Controles Alcohol/Drogas</span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+            <div className={`p-4 rounded-2xl border shadow-sm ${
+              conductoresEnReposoActivo.length > 0 ? 'bg-rose-50 border-rose-300' : 'bg-white border-slate-200'
+            }`}>
+              <span className="text-[11px] font-bold text-slate-500 uppercase">En Reposo (PVT)</span>
+              <div className={`text-2xl sm:text-3xl font-black mt-1 ${
+                conductoresEnReposoActivo.length > 0 ? 'text-rose-700' : 'text-slate-800'
+              }`}>
+                {conductoresEnReposoActivo.length}
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">Fatiga activa detectada</p>
+            </div>
+
+            <div className={`p-4 rounded-2xl border shadow-sm ${
+              citadosPendientes.length > 0 ? 'bg-amber-50 border-amber-300' : 'bg-white border-slate-200'
+            }`}>
+              <span className="text-[11px] font-bold text-slate-500 uppercase">Citados Drogas / Alc.</span>
+              <div className={`text-2xl sm:text-3xl font-black mt-1 ${
+                citadosPendientes.length > 0 ? 'text-amber-700' : 'text-slate-800'
+              }`}>
+                {citadosPendientes.length}
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">Pendientes de examen</p>
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+              <span className="text-[11px] font-bold text-slate-500 uppercase">Tests Realizados</span>
               <div className="text-2xl sm:text-3xl font-black text-slate-800 mt-1">{alcoholList.length}</div>
               <p className="text-[11px] text-slate-400 mt-1">Evaluaciones registradas</p>
             </div>
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-              <span className="text-[11px] font-bold text-slate-500 uppercase">Evidencias Procedimiento</span>
+
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+              <span className="text-[11px] font-bold text-slate-500 uppercase">Supervisiones</span>
               <div className="text-2xl sm:text-3xl font-black text-amber-600 mt-1">{procList.length}</div>
-              <p className="text-[11px] text-slate-400 mt-1">Supervisiones completadas</p>
+              <p className="text-[11px] text-slate-400 mt-1">Evidencias en terreno</p>
             </div>
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-              <span className="text-[11px] font-bold text-slate-500 uppercase">Checklists de Emergencia</span>
+
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+              <span className="text-[11px] font-bold text-slate-500 uppercase">Emergencias</span>
               <div className="text-2xl sm:text-3xl font-black text-slate-800 mt-1">{emergenciasList.length}</div>
-              <p className="text-[11px] text-slate-400 mt-1">Activaciones en ruta</p>
+              <p className="text-[11px] text-slate-400 mt-1">Checklists en ruta</p>
             </div>
           </div>
 
-          {renderTablaPlanilla()}
+          {citadosPendientes.length > 0 && renderTablaCitados()}
+
+          {renderTablaPVT()}
+
+          <PlanillaControlesDrogas controles={alcoholList} />
         </div>
       )}
 
       {seccion === 'planilla' && (
         <div className="space-y-4">
-          {renderTablaPlanilla()}
+          {citadosPendientes.length > 0 && renderTablaCitados()}
+          <PlanillaControlesDrogas controles={alcoholList} />
         </div>
       )}
 
       {seccion === 'bloqueos_pvt' && (
         <div className="space-y-4">
-          <TablaBloqueosPVT permitirLiberar={true} />
+          {renderTablaPVT()}
         </div>
       )}
 
@@ -502,34 +707,6 @@ export default function DashboardPrevencion() {
               setSeccion('kpi');
             }}
           />
-        </div>
-      )}
-
-      {/* Modal para ver fotos de credencial o prueba reactiva */}
-      {modalFoto && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
-            <div className="flex justify-between items-center border-b pb-2">
-              <h4 className="text-xs font-bold text-slate-800">{modalFoto.titulo}</h4>
-              <button
-                type="button"
-                onClick={() => setModalFoto(null)}
-                className="text-slate-400 hover:text-slate-700 text-sm font-bold"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="flex justify-center bg-slate-50 p-2 rounded-xl border border-slate-200">
-              <img src={modalFoto.url} alt="Evidencia" className="max-h-72 object-contain rounded-lg" />
-            </div>
-            <button
-              type="button"
-              onClick={() => setModalFoto(null)}
-              className="w-full py-2 bg-slate-800 text-white font-bold rounded-xl text-xs hover:bg-slate-900"
-            >
-              Cerrar
-            </button>
-          </div>
         </div>
       )}
     </ResponsiveLayout>

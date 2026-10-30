@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, getDocs, getDoc, doc, updateDoc, addDoc, serverTimestamp, where, runTransaction } from 'firebase/firestore';
+import { collection, query, getDocs, getDoc, doc, updateDoc, addDoc, serverTimestamp, where, runTransaction, onSnapshot } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { db, auth } from '../lib/firebase';
 import { ResponsiveLayout } from '../components/common/ResponsiveLayout';
@@ -67,32 +67,62 @@ export default function DashboardTaller() {
     navigate('/login');
   };
 
-  const cargarCitasYPerfil = async () => {
-    try {
-      const user = auth.currentUser;
-      if (!user) return;
-      
-      const userDoc = await getDoc(doc(db, 'usuarios', user.uid));
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    // Cargar perfil del taller
+    getDoc(doc(db, 'usuarios', user.uid)).then((userDoc) => {
       if (userDoc.exists()) {
         setPerfilTaller(userDoc.data());
       }
-      
-      const q = query(collection(db, 'citas_taller'), where('tallerId', '==', user.uid));
-      const querySnapshot = await getDocs(q);
-      
-      const citasData: any[] = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      citasData.sort((a: any, b: any) => {
-        return new Date(b.fecha).getTime() - new Date(a.fecha).getTime();
-      });
-      
-      setCitas(citasData);
-    } catch (error) {
-      console.error(error);
-    }
-  };
+    });
 
-  useEffect(() => {
-    cargarCitasYPerfil();
+    let listaCitasTaller: any[] = [];
+    let listaAgendaConductor: any[] = [];
+
+    const unificarCitas = () => {
+      const combinadas = [...listaCitasTaller, ...listaAgendaConductor];
+      combinadas.sort((a, b) => {
+        const timeA = new Date(a.fecha || a.fechaCita || 0).getTime();
+        const timeB = new Date(b.fecha || b.fechaCita || 0).getTime();
+        return timeB - timeA;
+      });
+      setCitas(combinadas);
+    };
+
+    // 1. Escuchar citas_taller en tiempo real
+    const qCitas = query(collection(db, 'citas_taller'), where('tallerId', '==', user.uid));
+    const unsubCitas = onSnapshot(qCitas, (snap) => {
+      listaCitasTaller = snap.docs.map(d => ({
+        id: d.id,
+        coleccionOrigen: 'citas_taller',
+        fecha: d.data().fecha || d.data().fechaCita,
+        hora: d.data().hora || d.data().horaCita,
+        ...d.data()
+      }));
+      unificarCitas();
+    });
+
+    // 2. Escuchar agenda_taller en tiempo real (agendadas por conductor)
+    const qAgenda = query(collection(db, 'agenda_taller'));
+    const unsubAgenda = onSnapshot(qAgenda, (snap) => {
+      listaAgendaConductor = snap.docs
+        .map(d => ({
+          id: d.id,
+          coleccionOrigen: 'agenda_taller',
+          fecha: d.data().fechaCita || d.data().fecha,
+          hora: d.data().horaCita || d.data().hora,
+          ...d.data()
+        }))
+        .filter((c: any) => !c.tallerId || c.tallerId === user?.uid || c.tallerId === 'taller-central');
+      unificarCitas();
+    });
+
+    return () => {
+      unsubCitas();
+      unsubAgenda();
+    };
   }, []);
 
   const seleccionarCita = async (cita: any) => {
@@ -105,7 +135,6 @@ export default function DashboardTaller() {
     setValorTorque('');
     setSistemasSeguridadOperativos(true);
 
-    // Sugerencia de vigencia de torque (por defecto 3 meses / 90 días para faena)
     const fechaHoy = new Date();
     fechaHoy.setMonth(fechaHoy.getMonth() + 3);
     setVencimientoTorque(fechaHoy.toISOString().split('T')[0]);
@@ -205,7 +234,8 @@ export default function DashboardTaller() {
         tallerId: auth.currentUser?.uid || ''
       });
 
-      await updateDoc(doc(db, 'citas_taller', citaSeleccionada.id), {
+      const coleccionActualizar = citaSeleccionada.coleccionOrigen || 'citas_taller';
+      await updateDoc(doc(db, coleccionActualizar, citaSeleccionada.id), {
         estado: 'completada',
         numeroOT: correlativo.numeroStr
       });
@@ -226,7 +256,6 @@ export default function DashboardTaller() {
 
       alert(`Orden de Trabajo ${correlativo.numeroStr} guardada exitosamente.`);
       seleccionarCita(citaSeleccionada);
-      cargarCitasYPerfil();
     } catch (error) {
       console.error(error);
       alert("Error al generar la Orden de Trabajo correlativa.");
@@ -272,12 +301,12 @@ export default function DashboardTaller() {
         {/* Columna Izquierda: Lista de Vehículos Asignados */}
         <div className="lg:col-span-1 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden h-fit">
           <div className="p-4 bg-slate-800 text-white font-bold text-xs sm:text-sm uppercase tracking-wide">
-            Vehículos Asignados
+            Vehículos Asignados y Agendados
           </div>
           <div className="divide-y divide-slate-100 max-h-[500px] lg:max-h-[650px] overflow-y-auto scroll-touch">
             {citas.length === 0 && (
               <p className="p-6 text-center text-xs sm:text-sm text-slate-400">
-                No hay vehículos asignados a este taller aún.
+                No hay vehículos agendados para este taller actualmente.
               </p>
             )}
             {citas.map(cita => (
@@ -288,11 +317,11 @@ export default function DashboardTaller() {
               >
                 <div className="flex justify-between items-center">
                   <span className="font-black text-base sm:text-lg text-slate-800 font-mono">{cita.patente}</span>
-                  <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${cita.estado === 'pendiente' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                  <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${cita.estado === 'pendiente' || cita.estado === 'agendada' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
                     {cita.estado}
                   </span>
                 </div>
-                <span className="text-xs text-slate-500 block mt-1">Ingreso: {cita.fecha} {cita.hora}</span>
+                <span className="text-xs text-slate-500 block mt-1">Cita: {cita.fecha} {cita.hora}</span>
                 <span className="text-xs text-slate-600 font-medium truncate block mt-0.5">Motivo: {cita.motivo}</span>
               </button>
             ))}
@@ -348,7 +377,7 @@ export default function DashboardTaller() {
                     <p className="text-xs text-slate-500">Creado por: {otExistente.creadoPor || 'Taller'}</p>
                     {otExistente.certificacionTorque?.realizado && (
                       <div className="mt-2 text-xs text-emerald-700 font-bold bg-emerald-50 p-2.5 rounded-lg border border-emerald-200">
-                        Torre/Torque verificado: {otExistente.certificacionTorque.valor} (Vence: {otExistente.certificacionTorque.vencimiento || 'No informada'})
+                        Torque verificado: {otExistente.certificacionTorque.valor} (Vence: {otExistente.certificacionTorque.vencimiento || 'No informada'})
                       </div>
                     )}
                   </div>
@@ -356,7 +385,6 @@ export default function DashboardTaller() {
                   <p className="text-xs sm:text-sm text-slate-500">Cargando datos del vehículo...</p>
                 ) : (
                   <>
-                    {/* Próximo Kilometraje y Mantenimiento */}
                     <div className="mb-6 bg-indigo-50/60 p-4 rounded-xl border border-indigo-100">
                       <label className="block text-xs font-black text-indigo-900 uppercase tracking-wider mb-2">Programar Próximo Mantenimiento (KM)</label>
                       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
@@ -370,7 +398,6 @@ export default function DashboardTaller() {
                       </div>
                     </div>
 
-                    {/* Protocolo de Torque y Sistemas de Seguridad */}
                     <div className="mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
                       <h3 className="text-xs font-black text-slate-700 uppercase tracking-wider">
                         Protocolo de Torque y Sistemas de Seguridad (Faena)
@@ -417,7 +444,6 @@ export default function DashboardTaller() {
                       </label>
                     </div>
 
-                    {/* Formulario según tipo de vehículo */}
                     {vehiculoData.tipo === 'Camioneta' ? (
                       <div className="space-y-4">
                         <div className="flex flex-wrap gap-4 mb-2">
@@ -473,8 +499,7 @@ export default function DashboardTaller() {
                             className="p-2.5 border border-slate-300 rounded-xl text-xs sm:text-sm w-full" 
                           />
                         </div>
-                        
-                        {/* Tareas dinámicas adaptables */}
+
                         <div>
                           <h3 className="text-xs font-black text-slate-700 uppercase tracking-wider mb-2">Descripción de Tareas</h3>
                           <div className="space-y-2">
@@ -520,7 +545,6 @@ export default function DashboardTaller() {
                           </button>
                         </div>
 
-                        {/* Repuestos dinámicos adaptables */}
                         <div>
                           <h3 className="text-xs font-black text-slate-700 uppercase tracking-wider mb-2">Repuestos / Consumibles</h3>
                           <div className="space-y-2">

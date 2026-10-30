@@ -92,6 +92,9 @@ export default function VistaConductor() {
     return cache ? JSON.parse(cache).identificado || false : false;
   });
 
+  const [testDrogasNotificado, setTestDrogasNotificado] = useState(false);
+  const [registrandoNotificacionDrogas, setRegistrandoNotificacionDrogas] = useState(false);
+
   const [parejaTests, setParejaTests] = useState<[TipoTestPVT, TipoTestPVT]>(['seguimiento', 'reaccion']);
   const [testActualIndice, setTestActualIndice] = useState<number>(0);
   const [fasePVTCompletada, setFasePVTCompletada] = useState(false);
@@ -145,7 +148,23 @@ export default function VistaConductor() {
     if (cache) {
       const data = JSON.parse(cache);
       if (data.fotoLicenciaInternaPreview) {
-        return base64ToFile(data.fotoLicenciaInternaPreview, `licencia_interna_${patenteValida}.jpg`);
+        return base64ToFile(data.fotoLicenciaInternaPreview, `licencia_interna_frontal_${patenteValida}.jpg`);
+      }
+    }
+    return null;
+  });
+
+  const [fotoLicenciaInternaTraseraPreview, setFotoLicenciaInternaTraseraPreview] = useState<string | null>(() => {
+    const cache = sessionStorage.getItem(storageKey);
+    return cache ? JSON.parse(cache).fotoLicenciaInternaTraseraPreview || null : null;
+  });
+
+  const [fotoLicenciaInternaTrasera, setFotoLicenciaInternaTrasera] = useState<File | null>(() => {
+    const cache = sessionStorage.getItem(storageKey);
+    if (cache) {
+      const data = JSON.parse(cache);
+      if (data.fotoLicenciaInternaTraseraPreview) {
+        return base64ToFile(data.fotoLicenciaInternaTraseraPreview, `licencia_interna_trasera_${patenteValida}.jpg`);
       }
     }
     return null;
@@ -153,7 +172,7 @@ export default function VistaConductor() {
 
   const [encuestaCompletada, setEncuestaCompletada] = useState(false);
   const [bloqueado, setBloqueado] = useState(false);
-  const [motivoBloqueo, setMotivoBloqueo] = useState<'pvt' | 'checklist' | null>(null);
+  const [motivoBloqueo, setMotivoBloqueo] = useState<'pvt' | 'checklist' | 'droga' | null>(null);
   const [mostrarResumen, setMostrarResumen] = useState(false);
   const [jornadaFinalizada, setJornadaFinalizada] = useState(false);
 
@@ -221,17 +240,35 @@ export default function VistaConductor() {
       rutConductor,
       fotoLicenciaPreview,
       fotoLicenciaInternaPreview,
+      fotoLicenciaInternaTraseraPreview,
       kilometraje,
       fotoPreview,
       respuestasChecklist,
       ubicacionGPS
     };
     sessionStorage.setItem(storageKey, JSON.stringify(datosCache));
-  }, [identificado, nombreConductor, rutConductor, fotoLicenciaPreview, fotoLicenciaInternaPreview, kilometraje, fotoPreview, respuestasChecklist, ubicacionGPS, patenteValida, storageKey]);
+  }, [
+    identificado,
+    nombreConductor,
+    rutConductor,
+    fotoLicenciaPreview,
+    fotoLicenciaInternaPreview,
+    fotoLicenciaInternaTraseraPreview,
+    kilometraje,
+    fotoPreview,
+    respuestasChecklist,
+    ubicacionGPS,
+    patenteValida,
+    storageKey
+  ]);
 
+  // CORRECCIÓN: Carga del vehículo a prueba de cierres de estado (stale closures)
   useEffect(() => {
     const cargarVehiculo = async () => {
-      if (!patenteValida) return;
+      if (!patenteValida) {
+        setCargandoVehiculo(false);
+        return;
+      }
       try {
         const qVehiculo = query(collection(db, 'vehiculos'), where('patente', '==', patenteValida));
         const snapVehiculo = await getDocs(qVehiculo);
@@ -243,12 +280,14 @@ export default function VistaConductor() {
 
           const kmRealAnterior = Number(vData.kilometrajeActual) || 0;
           setKilometrajeAnterior(kmRealAnterior);
-          if (!kilometraje && kmRealAnterior > 0) {
-            setKilometraje(kmRealAnterior.toString());
-          }
+          
+          // Se usa la función callback de setKilometraje para asegurar que toma el valor actual
+          setKilometraje((prev) => prev ? prev : (kmRealAnterior > 0 ? kmRealAnterior.toString() : ''));
+        } else {
+          console.warn(`No se encontró el vehículo con patente ${patenteValida}`);
         }
       } catch (error) {
-        console.error(error);
+        console.error("Error al cargar vehículo desde Firebase:", error);
       } finally {
         setCargandoVehiculo(false);
       }
@@ -281,6 +320,26 @@ export default function VistaConductor() {
       });
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const capturarLicenciaInternaFrontal = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setFotoLicenciaInterna(file);
+      const reader = new FileReader();
+      reader.onload = (event) => setFotoLicenciaInternaPreview(event.target?.result as string);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const capturarLicenciaInternaTrasera = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setFotoLicenciaInternaTrasera(file);
+      const reader = new FileReader();
+      reader.onload = (event) => setFotoLicenciaInternaTraseraPreview(event.target?.result as string);
+      reader.readAsDataURL(file);
     }
   };
 
@@ -402,12 +461,22 @@ export default function VistaConductor() {
 
       let licenciaInternaUrl = null;
       let licenciaInternaPath = null;
-      const archivoLicenciaInterna = fotoLicenciaInterna || (fotoLicenciaInternaPreview ? base64ToFile(fotoLicenciaInternaPreview, `licencia_interna_${patenteValida}.jpg`) : null);
+      const archivoLicenciaInterna = fotoLicenciaInterna || (fotoLicenciaInternaPreview ? base64ToFile(fotoLicenciaInternaPreview, `licencia_interna_frontal_${patenteValida}.jpg`) : null);
       if (archivoLicenciaInterna) {
-        licenciaInternaPath = `licencias_internas/${patenteValida}-${Date.now()}-${archivoLicenciaInterna.name}`;
+        licenciaInternaPath = `licencias_internas/${patenteValida}-${Date.now()}-frontal-${archivoLicenciaInterna.name}`;
         const licenciaInternaRef = ref(storage, licenciaInternaPath);
         await uploadBytes(licenciaInternaRef, archivoLicenciaInterna);
         licenciaInternaUrl = await getDownloadURL(licenciaInternaRef);
+      }
+
+      let licenciaInternaTraseraUrl = null;
+      let licenciaInternaTraseraPath = null;
+      const archivoLicenciaInternaTrasera = fotoLicenciaInternaTrasera || (fotoLicenciaInternaTraseraPreview ? base64ToFile(fotoLicenciaInternaTraseraPreview, `licencia_interna_trasera_${patenteValida}.jpg`) : null);
+      if (archivoLicenciaInternaTrasera) {
+        licenciaInternaTraseraPath = `licencias_internas/${patenteValida}-${Date.now()}-trasera-${archivoLicenciaInternaTrasera.name}`;
+        const licenciaInternaTraseraRef = ref(storage, licenciaInternaTraseraPath);
+        await uploadBytes(licenciaInternaTraseraRef, archivoLicenciaInternaTrasera);
+        licenciaInternaTraseraUrl = await getDownloadURL(licenciaInternaTraseraRef);
       }
 
       let firmaUrl = null;
@@ -433,10 +502,13 @@ export default function VistaConductor() {
         licenciaPath,
         licenciaInternaUrl,
         licenciaInternaPath,
+        licenciaInternaTraseraUrl,
+        licenciaInternaTraseraPath,
         firmaUrl,
         firmaPath,
         fallaCritica: tieneFallaCritica,
         bloqueoPorTestCognitivo: false,
+        testDrogasNotificado: true,
         respuestas: respuestasChecklist,
         testsCognitivos: datosTests,
         puntajePVT: puntajeGlobalPVT,
@@ -479,6 +551,7 @@ export default function VistaConductor() {
           if (data.firmaPath) await deleteObject(ref(storage, data.firmaPath)).catch(() => null);
           if (data.licenciaPath) await deleteObject(ref(storage, data.licenciaPath)).catch(() => null);
           if (data.licenciaInternaPath) await deleteObject(ref(storage, data.licenciaInternaPath)).catch(() => null);
+          if (data.licenciaInternaTraseraPath) await deleteObject(ref(storage, data.licenciaInternaTraseraPath)).catch(() => null);
           await deleteDoc(item.ref);
         }
       }
@@ -654,6 +727,28 @@ export default function VistaConductor() {
       console.error("Error al validar bloqueo inicial:", err);
     }
 
+    setRegistrandoNotificacionDrogas(true);
+    try {
+      await addDoc(collection(db, 'controles_alcohol_drogas'), {
+        patente: patenteValida,
+        conductorNombre: nombreConductor,
+        conductorRut: rutConductor,
+        estado: 'pendiente',
+        fechaSeleccion: serverTimestamp(),
+        tipoSeleccion: 'Obligatorio / Pruebas',
+        ubicacion: ubicacionGPS || null
+      });
+
+      await registrarEnHistorial(
+        'SELECCION_CONTROL_DROGAS',
+        `Conductor ${nombreConductor} (${rutConductor}) citado a control de alcohol y drogas para patente ${patenteValida}`
+      );
+    } catch (error) {
+      console.error("Error registrando citación a control de drogas:", error);
+    } finally {
+      setRegistrandoNotificacionDrogas(false);
+    }
+
     const parejaElegida = seleccionarParejaAleatoria();
     setParejaTests(parejaElegida);
     setTestActualIndice(0);
@@ -662,12 +757,13 @@ export default function VistaConductor() {
     setBloqueado(false);
     setMotivoBloqueo(null);
     setDatosBloqueoPVT(null);
+    setTestDrogasNotificado(false);
     setIdentificado(true);
   };
 
   return (
     <div className="min-h-screen bg-cover bg-center bg-fixed bg-no-repeat flex flex-col items-center justify-center p-4 md:p-6 relative" style={{ backgroundImage: "url('/fondo-conductor.jpg')" }}>
-      {/* 1. Identificación y Descarga Inmediata de Documentos */}
+      {/* 1. Identificación */}
       {!identificado && (
         <IdentificacionConductor
           patente={patenteValida}
@@ -678,9 +774,6 @@ export default function VistaConductor() {
           fotoLicenciaPreview={fotoLicenciaPreview}
           setFotoLicenciaPreview={setFotoLicenciaPreview}
           setFotoLicencia={setFotoLicencia}
-          fotoLicenciaInternaPreview={fotoLicenciaInternaPreview}
-          setFotoLicenciaInternaPreview={setFotoLicenciaInternaPreview}
-          setFotoLicenciaInterna={setFotoLicenciaInterna}
           ubicacionGPS={ubicacionGPS}
           setUbicacionGPS={setUbicacionGPS}
           vehiculo={vehiculo}
@@ -690,8 +783,123 @@ export default function VistaConductor() {
         />
       )}
 
-      {/* 2. Pruebas Psicomotoras Aleatorias */}
-      {identificado && !fasePVTCompletada && !bloqueado && (
+      {/* 2. Pantalla de Aviso: Selección para Control de Alcohol y Drogas + Licencia de Faena */}
+      {identificado && !testDrogasNotificado && !bloqueado && (
+        <div className="bg-white/95 backdrop-blur-md p-6 md:p-8 rounded-3xl shadow-2xl max-w-md w-full border border-amber-300 animate-fade-in relative z-10 text-center my-6">
+          <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-3 shadow-inner">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+
+          <span className="bg-amber-100 text-amber-800 text-xs font-black uppercase px-3 py-1 rounded-full shadow-sm tracking-wider">
+            Control de Seguridad
+          </span>
+
+          <h2 className="text-2xl font-black text-slate-800 mt-2 leading-tight">
+            Has sido seleccionado
+          </h2>
+
+          <div className="bg-amber-50 border border-amber-200/80 rounded-2xl p-4 my-4 text-left">
+            <p className="text-sm font-bold text-amber-900 leading-snug">
+              Has sido seleccionado para realizar el test de alcohol y drogas obligatorio.
+            </p>
+            <p className="text-xs text-amber-800 mt-1.5 font-medium">
+              Por favor, dirígete de inmediato al área de <strong>Prevención de Riesgos</strong> para la toma de la muestra antes de comenzar tu ruta.
+            </p>
+          </div>
+
+          {/* Carga de Licencia Interna de Faena (Ambos Lados) */}
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 mb-5 text-left">
+            <label className="block text-xs font-black text-slate-700 uppercase mb-1">
+              Licencia Interna de Faena (Ambos Lados)
+            </label>
+            <p className="text-[11px] text-slate-500 mb-3">
+              Adjunta fotografía de la cara frontal y de la cara trasera de tu credencial de faena:
+            </p>
+
+            <div className="grid grid-cols-2 gap-2.5">
+              {/* Cara Frontal */}
+              <label className="block cursor-pointer">
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={capturarLicenciaInternaFrontal}
+                  className="hidden"
+                />
+                <div className="border-2 border-dashed border-slate-300 bg-white rounded-xl p-3 text-center hover:bg-slate-100 transition-all shadow-sm">
+                  {fotoLicenciaInternaPreview ? (
+                    <div className="flex flex-col items-center">
+                      <img
+                        src={fotoLicenciaInternaPreview}
+                        className="h-14 w-auto rounded object-cover mb-1 shadow-sm"
+                        alt="Frontal"
+                      />
+                      <span className="text-[10px] font-bold text-emerald-700">Frontal OK</span>
+                    </div>
+                  ) : (
+                    <div className="py-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-slate-400 mx-auto mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                      </svg>
+                      <span className="text-[11px] font-bold text-slate-600 block">+ Cara Frontal</span>
+                    </div>
+                  )}
+                </div>
+              </label>
+
+              {/* Cara Trasera */}
+              <label className="block cursor-pointer">
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={capturarLicenciaInternaTrasera}
+                  className="hidden"
+                />
+                <div className="border-2 border-dashed border-slate-300 bg-white rounded-xl p-3 text-center hover:bg-slate-100 transition-all shadow-sm">
+                  {fotoLicenciaInternaTraseraPreview ? (
+                    <div className="flex flex-col items-center">
+                      <img
+                        src={fotoLicenciaInternaTraseraPreview}
+                        className="h-14 w-auto rounded object-cover mb-1 shadow-sm"
+                        alt="Trasera"
+                      />
+                      <span className="text-[10px] font-bold text-emerald-700">Trasera OK</span>
+                    </div>
+                  ) : (
+                    <div className="py-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-slate-400 mx-auto mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                      </svg>
+                      <span className="text-[11px] font-bold text-slate-600 block">+ Cara Trasera</span>
+                    </div>
+                  )}
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            disabled={registrandoNotificacionDrogas}
+            onClick={() => {
+              if (!fotoLicenciaInternaPreview || !fotoLicenciaInternaTraseraPreview) {
+                const proceder = window.confirm("Aún no has adjuntado ambos lados de tu licencia interna de faena. ¿Deseas continuar a las pruebas?");
+                if (!proceder) return;
+              }
+              setTestDrogasNotificado(true);
+            }}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl shadow-lg transition-all active:scale-[0.98]"
+          >
+            {registrandoNotificacionDrogas ? 'Registrando en sistema...' : 'Entendido, continuar a pruebas psicomotoras'}
+          </button>
+        </div>
+      )}
+
+      {/* 3. Pruebas Psicomotoras Aleatorias */}
+      {identificado && testDrogasNotificado && !fasePVTCompletada && !bloqueado && (
         <div className="w-full flex flex-col items-center">
           <div className="mb-3 text-[11px] font-black uppercase tracking-wider text-slate-700 bg-white/70 backdrop-blur-sm px-4 py-1.5 rounded-full shadow-sm">
             Batería Psicomotora: Prueba {testActualIndice + 1} de 2
@@ -700,8 +908,8 @@ export default function VistaConductor() {
         </div>
       )}
 
-      {/* 3. Tarjeta de Puntaje de Pruebas Psicomotoras */}
-      {identificado && fasePVTCompletada && mostrarPantallaPuntajePVT && !bloqueado && (
+      {/* 4. Tarjeta de Puntaje de Pruebas Psicomotoras */}
+      {identificado && testDrogasNotificado && fasePVTCompletada && mostrarPantallaPuntajePVT && !bloqueado && (
         <div className="bg-white/70 backdrop-blur-md p-8 rounded-3xl shadow-2xl max-w-md w-full border border-white/60 animate-fade-in relative z-10 text-center">
           <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -729,7 +937,7 @@ export default function VistaConductor() {
         </div>
       )}
 
-      {/* 4. Pantalla de Bloqueo */}
+      {/* 5. Pantalla de Bloqueo */}
       {bloqueado && !mostrarResumen && (
         <div className="bg-white/70 backdrop-blur-md p-8 rounded-3xl shadow-2xl max-w-md border-2 border-red-500/80 animate-fade-in w-full relative z-10 text-center">
           <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
@@ -749,14 +957,18 @@ export default function VistaConductor() {
                 <span>Evaluación psicomotora: Aprobada ({puntajeGlobalPVT}%)</span>
               </div>
               <p className="text-xs text-slate-500 font-medium">
-                Comunícate inmediatamente con el supervisor o encargado de flota para reportar las fallas.
+                Debes coordinar la hora de ingreso al taller antes de finalizar la jornada.
               </p>
+
               <button
                 type="button"
                 onClick={() => setMostrarResumen(true)}
-                className="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-3.5 rounded-2xl text-xs shadow-md transition-all active:scale-[0.98]"
+                className="w-full bg-amber-600 hover:bg-amber-700 text-white font-black py-4 rounded-2xl text-xs shadow-lg transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
               >
-                Ver Resumen y Documentación
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                Agendar Hora en Taller y Ver Resumen
               </button>
             </div>
           ) : (
@@ -793,7 +1005,7 @@ export default function VistaConductor() {
         </div>
       )}
 
-      {/* 5. Enviando reporte */}
+      {/* 6. Enviando reporte */}
       {encuestaCompletada && !mostrarResumen && (
         <div className="bg-white/60 backdrop-blur-md p-8 rounded-2xl shadow-xl max-w-md border-2 border-green-500/80 animate-fade-in w-full relative z-10 border border-white/50 text-center">
           <h1 className="text-2xl font-black text-green-700">Reporte Enviado</h1>
@@ -804,8 +1016,8 @@ export default function VistaConductor() {
         </div>
       )}
 
-      {/* 6. Formulario de Checklist */}
-      {identificado && fasePVTCompletada && !mostrarPantallaPuntajePVT && !encuestaCompletada && !bloqueado && (
+      {/* 7. Formulario de Checklist */}
+      {identificado && testDrogasNotificado && fasePVTCompletada && !mostrarPantallaPuntajePVT && !encuestaCompletada && !bloqueado && (
         <div className="w-full max-w-2xl space-y-4">
           <div className="bg-white/85 backdrop-blur-md rounded-2xl border border-white/60 p-5 shadow-xl space-y-4">
             <div>
@@ -890,7 +1102,7 @@ export default function VistaConductor() {
         </div>
       )}
 
-      {/* 7. Resumen de Jornada */}
+      {/* 8. Resumen de Jornada */}
       {mostrarResumen && !jornadaFinalizada && (
         <ResumenConductor
           idPatente={patenteValida}
@@ -908,7 +1120,7 @@ export default function VistaConductor() {
         />
       )}
 
-      {/* 8. Despedida */}
+      {/* 9. Despedida */}
       {jornadaFinalizada && (
         <div className="bg-white/60 backdrop-blur-md p-10 rounded-3xl shadow-2xl max-w-md w-full border-t-8 border-green-500 animate-fade-in relative z-10 border border-white/50 text-center">
           <div className="mx-auto w-16 h-16 bg-green-100/90 text-green-700 rounded-full flex items-center justify-center mb-6 shadow-inner">
@@ -939,10 +1151,10 @@ export default function VistaConductor() {
         />
       )}
 
-      {/* Modal de Checklist de Emergencia */}
+      {/* Modal de Checklist de Emergencia con Scroll Corregido */}
       {mostrarChecklistEmergencia && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-4 backdrop-blur-sm overflow-y-auto">
-          <div className="w-full max-w-2xl my-8">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 p-3 sm:p-4 backdrop-blur-sm flex justify-center items-start min-h-full py-6">
+          <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden my-auto border border-slate-200">
             <ChecklistEmergenciaConductor
               conductorUid={rutConductor || patenteValida}
               conductorNombre={nombreConductor || 'Conductor sin registrar'}

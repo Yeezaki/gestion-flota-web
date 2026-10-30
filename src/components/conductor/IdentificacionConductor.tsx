@@ -16,12 +16,6 @@ type IdentificacionConductorProps = {
   fotoLicenciaPreview: string | null;
   setFotoLicenciaPreview: (val: string | null) => void;
   setFotoLicencia: (val: File | null) => void;
-  fotoLicenciaInternaPreview?: string | null;
-  setFotoLicenciaInternaPreview?: (val: string | null) => void;
-  setFotoLicenciaInterna?: (val: File | null) => void;
-  fotoLicenciaInternaTraseraPreview?: string | null;
-  setFotoLicenciaInternaTraseraPreview?: (val: string | null) => void;
-  setFotoLicenciaInternaTrasera?: (val: File | null) => void;
   ubicacionGPS: UbicacionGPS | null;
   setUbicacionGPS: (val: UbicacionGPS | null) => void;
   vehiculo?: any;
@@ -61,12 +55,6 @@ export default function IdentificacionConductor({
   fotoLicenciaPreview,
   setFotoLicenciaPreview,
   setFotoLicencia,
-  fotoLicenciaInternaPreview,
-  setFotoLicenciaInternaPreview,
-  setFotoLicenciaInterna,
-  fotoLicenciaInternaTraseraPreview,
-  setFotoLicenciaInternaTraseraPreview,
-  setFotoLicenciaInternaTrasera,
   ubicacionGPS,
   setUbicacionGPS,
   vehiculo,
@@ -76,7 +64,6 @@ export default function IdentificacionConductor({
   const [error, setError] = useState<string | null>(null);
   const [obteniendoGPS, setObteniendoGPS] = useState(false);
   const [mostrarDocsVehiculo, setMostrarDocsVehiculo] = useState(true);
-  const [mostrarDocsFaena, setMostrarDocsFaena] = useState(false);
 
   const manejarCambioRut = (e: React.ChangeEvent<HTMLInputElement>) => {
     const formateado = formatearRutChileno(e.target.value);
@@ -92,26 +79,6 @@ export default function IdentificacionConductor({
       reader.onload = (event) => setFotoLicenciaPreview(event.target?.result as string);
       reader.readAsDataURL(file);
       if (error) setError(null);
-    }
-  };
-
-  const capturarLicenciaInternaFrontal = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0] && setFotoLicenciaInterna && setFotoLicenciaInternaPreview) {
-      const file = e.target.files[0];
-      setFotoLicenciaInterna(file);
-      const reader = new FileReader();
-      reader.onload = (event) => setFotoLicenciaInternaPreview(event.target?.result as string);
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const capturarLicenciaInternaTrasera = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0] && setFotoLicenciaInternaTrasera && setFotoLicenciaInternaTraseraPreview) {
-      const file = e.target.files[0];
-      setFotoLicenciaInternaTrasera(file);
-      const reader = new FileReader();
-      reader.onload = (event) => setFotoLicenciaInternaTraseraPreview(event.target?.result as string);
-      reader.readAsDataURL(file);
     }
   };
 
@@ -219,7 +186,6 @@ export default function IdentificacionConductor({
     }
   };
 
-  // 1. Documentos Vehiculares y Mecánicos
   const docsVehiculo = [
     { nombre: 'Permiso de Circulación', url: vehiculo?.urlCirculacion, fecha: vehiculo?.vencimientoCirculacion },
     { nombre: 'Revisión Técnica', url: vehiculo?.urlRevision, fecha: vehiculo?.vencimientoRevision },
@@ -227,16 +193,6 @@ export default function IdentificacionConductor({
     { nombre: 'Certificado de Mantención Vigente', url: vehiculo?.urlCertificado, fecha: vehiculo?.vencimientoCertificado },
     { nombre: 'Certificado de Torque Vigente', url: vehiculo?.urlCertificadoTorque || vehiculo?.urlTorque, fecha: vehiculo?.vencimientoTorque },
     { nombre: 'Programa / Pauta de Mantención', url: vehiculo?.urlPauta, fecha: vehiculo?.vencimientoPauta || null }
-  ];
-
-  // 2. Documentación Preventiva y Faena
-  const docsSeguridadFaena = [
-    { nombre: 'Mapa de Riesgos de Conducción', url: vehiculo?.urlMapaRiesgos, fecha: vehiculo?.vencimientoMapaRiesgos || null },
-    { nombre: 'Procedimiento de Conducción', url: vehiculo?.urlProcedimientoConduccion, fecha: vehiculo?.vencimientoProcedimiento || null },
-    { nombre: 'Plan de Tránsito', url: vehiculo?.urlPlanTransito, fecha: vehiculo?.vencimientoPlanTransito || null },
-    { nombre: 'Plan de Emergencia', url: vehiculo?.urlPlanEmergencia, fecha: vehiculo?.vencimientoPlanEmergencia || null },
-    { nombre: 'Gestión y Control Alcohol y Drogas', url: vehiculo?.urlAlcoholDrogas, fecha: vehiculo?.vencimientoAlcoholDrogas || null },
-    { nombre: 'Reporte Control de Velocidad (GPS)', url: vehiculo?.urlReporteGPS, fecha: null }
   ];
 
   return (
@@ -247,7 +203,6 @@ export default function IdentificacionConductor({
         <p className="text-sm text-slate-600 mt-1 font-mono font-bold tracking-wider">Patente: {patente.toUpperCase()}</p>
       </div>
 
-      {/* Bloque 1: Documentación del Vehículo y Mecánica */}
       <div className="mb-4 bg-white/80 border border-slate-200 rounded-2xl p-4 shadow-sm">
         <div className="flex justify-between items-center mb-2">
           <div className="flex items-center gap-2">
@@ -317,76 +272,6 @@ export default function IdentificacionConductor({
         )}
       </div>
 
-      {/* Bloque 2: Documentación de Seguridad y Faena */}
-      <div className="mb-6 bg-white/80 border border-slate-200 rounded-2xl p-4 shadow-sm">
-        <div className="flex justify-between items-center mb-2">
-          <div className="flex items-center gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-            </svg>
-            <span className="text-xs font-black text-slate-700 uppercase tracking-wider">
-              Seguridad Operacional y Faena
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setMostrarDocsFaena(!mostrarDocsFaena)}
-            className="text-xs font-bold text-emerald-600 hover:text-emerald-800"
-          >
-            {mostrarDocsFaena ? 'Ocultar' : 'Ver'}
-          </button>
-        </div>
-
-        {mostrarDocsFaena && (
-          <div className="space-y-2 mt-3 pt-3 border-t border-slate-100 max-h-60 overflow-y-auto pr-1">
-            {docsSeguridadFaena.map((docItem, idx) => {
-              const tieneArchivo = Boolean(docItem.url);
-              const estado = calcularEstadoVencimiento && docItem.fecha ? calcularEstadoVencimiento(docItem.fecha) : null;
-
-              return (
-                <div key={idx} className="flex justify-between items-center bg-slate-50/90 p-2.5 rounded-xl border border-slate-200/60">
-                  <div className="flex flex-col max-w-[65%]">
-                    <span className="text-xs font-bold text-slate-800 truncate pr-2">{docItem.nombre}</span>
-                    {estado ? (
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full mt-1 border w-fit ${estado.clase}`}>
-                        {estado.texto}
-                      </span>
-                    ) : docItem.fecha ? (
-                      <span className="text-[10px] text-slate-500 mt-0.5">Vence: {docItem.fecha}</span>
-                    ) : tieneArchivo ? (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full mt-1 border w-fit bg-green-100 text-green-700 border-green-200">
-                        Disponible
-                      </span>
-                    ) : (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full mt-1 border w-fit bg-slate-100 text-slate-400 border-slate-200">
-                        No disponible
-                      </span>
-                    )}
-                  </div>
-
-                  {tieneArchivo ? (
-                    <button
-                      type="button"
-                      onClick={() => descargarArchivo(docItem.url, docItem.nombre)}
-                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition-colors shadow-sm flex items-center gap-1 shrink-0"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                      </svg>
-                      Descargar
-                    </button>
-                  ) : (
-                    <span className="text-[10px] font-bold text-slate-400 bg-slate-200/60 px-2 py-1 rounded-lg shrink-0">
-                      No adjunto
-                    </span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
       {error && (
         <div className="mb-4 p-3 bg-red-100/90 border border-red-300 text-red-700 text-xs font-bold rounded-xl text-center leading-relaxed">
           {error}
@@ -417,7 +302,6 @@ export default function IdentificacionConductor({
           />
         </div>
 
-        {/* Licencia Municipal */}
         <div>
           <label className="block text-xs font-black text-slate-600 uppercase mb-1 ml-1">Licencia Municipal Vigente *</label>
           <label className="block w-full cursor-pointer">
@@ -441,70 +325,8 @@ export default function IdentificacionConductor({
           </label>
         </div>
 
-        {/* Licencia Interna de Faena - Captura obligatoria/opcional de ambos lados antes del test */}
         <div>
-          <label className="block text-xs font-black text-slate-600 uppercase mb-1 ml-1">
-            Licencia Interna de Faena (Ambos Lados)
-          </label>
-          <div className="grid grid-cols-2 gap-2">
-            {/* Lado Frontal */}
-            <label className="block cursor-pointer">
-              <input
-                type="file"
-                accept="image/*"
-                capture="environment"
-                onChange={capturarLicenciaInternaFrontal}
-                className="hidden"
-              />
-              <div className="border-2 border-dashed border-slate-300 bg-white/60 rounded-xl p-2.5 text-center hover:bg-white/80 transition-all shadow-sm">
-                {fotoLicenciaInternaPreview ? (
-                  <div className="flex flex-col items-center">
-                    <img
-                      src={fotoLicenciaInternaPreview}
-                      className="h-12 w-auto rounded object-cover mb-1"
-                      alt="Frontal"
-                    />
-                    <span className="text-[10px] font-bold text-emerald-700">Frontal OK</span>
-                  </div>
-                ) : (
-                  <span className="text-[11px] font-bold text-slate-500 block py-1">
-                    + Cara Frontal
-                  </span>
-                )}
-              </div>
-            </label>
-
-            {/* Lado Trasero */}
-            <label className="block cursor-pointer">
-              <input
-                type="file"
-                accept="image/*"
-                capture="environment"
-                onChange={capturarLicenciaInternaTrasera}
-                className="hidden"
-              />
-              <div className="border-2 border-dashed border-slate-300 bg-white/60 rounded-xl p-2.5 text-center hover:bg-white/80 transition-all shadow-sm">
-                {fotoLicenciaInternaTraseraPreview ? (
-                  <div className="flex flex-col items-center">
-                    <img
-                      src={fotoLicenciaInternaTraseraPreview}
-                      className="h-12 w-auto rounded object-cover mb-1"
-                      alt="Trasera"
-                    />
-                    <span className="text-[10px] font-bold text-emerald-700">Trasera OK</span>
-                  </div>
-                ) : (
-                  <span className="text-[11px] font-bold text-slate-500 block py-1">
-                    + Cara Trasera
-                  </span>
-                )}
-              </div>
-            </label>
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-xs font-black text-slate-600 uppercase mb-1 ml-1">Ubicación de Salida / Faena</label>
+          <label className="block text-xs font-black text-slate-600 uppercase mb-1 ml-1">Ubicación de Salida</label>
           <button
             type="button"
             onClick={capturarUbicacion}
