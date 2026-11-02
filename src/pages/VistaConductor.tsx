@@ -70,16 +70,65 @@ const preguntasBasePorTipo = {
   ]
 };
 
-const base64ToFile = (base64String: string, filename: string): File => {
-  const arr = base64String.split(',');
-  const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
-  const bstr = atob(arr[1]);
-  let n = bstr.length;
-  const u8arr = new Uint8Array(n);
-  while (n--) {
-    u8arr[n] = bstr.charCodeAt(n);
+// Conversión segura de Base64 a File sin riesgo de excepción
+const base64ToFile = (base64String: string | null | undefined, filename: string): File | null => {
+  if (!base64String || typeof base64String !== 'string' || !base64String.includes(',')) {
+    return null;
   }
-  return new File([u8arr], filename, { type: mime });
+  try {
+    const arr = base64String.split(',');
+    const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new File([u8arr], filename, { type: mime });
+  } catch (err) {
+    console.error('Error convirtiendo imagen base64:', err);
+    return null;
+  }
+};
+
+// Genera una versión liviana de la foto (máx 1024px, 70% calidad) para la vista previa
+const crearPreviewImagen = (file: File, callback: (preview: string) => void) => {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const result = e.target?.result as string;
+    if (!result) return;
+
+    const img = new Image();
+    img.onload = () => {
+      const MAX_DIM = 1024;
+      let w = img.width;
+      let h = img.height;
+
+      if (w > MAX_DIM || h > MAX_DIM) {
+        if (w > h) {
+          h = Math.round((h * MAX_DIM) / w);
+          w = MAX_DIM;
+        } else {
+          w = Math.round((w * MAX_DIM) / h);
+          h = MAX_DIM;
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, w, h);
+          callback(canvas.toDataURL('image/jpeg', 0.7));
+          return;
+        }
+      }
+      callback(result);
+    };
+    img.onerror = () => callback(result);
+    img.src = result;
+  };
+  reader.readAsDataURL(file);
 };
 
 export default function VistaConductor() {
@@ -87,9 +136,13 @@ export default function VistaConductor() {
   const patenteValida = id ? id.toUpperCase() : '';
   const storageKey = `checklist_cache_${patenteValida}`;
 
-  const [identificado, setIdentificado] = useState(() => {
-    const cache = sessionStorage.getItem(storageKey);
-    return cache ? JSON.parse(cache).identificado || false : false;
+  const [identificado, setIdentificado] = useState<boolean>(() => {
+    try {
+      const cache = sessionStorage.getItem(storageKey);
+      return cache ? JSON.parse(cache).identificado || false : false;
+    } catch {
+      return false;
+    }
   });
 
   const [testDrogasNotificado, setTestDrogasNotificado] = useState(false);
@@ -108,67 +161,40 @@ export default function VistaConductor() {
   } | null>(null);
 
   const [ubicacionGPS, setUbicacionGPS] = useState<any>(() => {
-    const cache = sessionStorage.getItem(storageKey);
-    return cache ? JSON.parse(cache).ubicacionGPS || null : null;
-  });
-
-  const [nombreConductor, setNombreConductor] = useState(() => {
-    const cache = sessionStorage.getItem(storageKey);
-    return cache ? JSON.parse(cache).nombreConductor || '' : '';
-  });
-
-  const [rutConductor, setRutConductor] = useState(() => {
-    const cache = sessionStorage.getItem(storageKey);
-    return cache ? JSON.parse(cache).rutConductor || '' : '';
-  });
-
-  const [fotoLicenciaPreview, setFotoLicenciaPreview] = useState<string | null>(() => {
-    const cache = sessionStorage.getItem(storageKey);
-    return cache ? JSON.parse(cache).fotoLicenciaPreview || null : null;
-  });
-
-  const [fotoLicencia, setFotoLicencia] = useState<File | null>(() => {
-    const cache = sessionStorage.getItem(storageKey);
-    if (cache) {
-      const data = JSON.parse(cache);
-      if (data.fotoLicenciaPreview) {
-        return base64ToFile(data.fotoLicenciaPreview, `licencia_${patenteValida}.jpg`);
-      }
+    try {
+      const cache = sessionStorage.getItem(storageKey);
+      return cache ? JSON.parse(cache).ubicacionGPS || null : null;
+    } catch {
+      return null;
     }
-    return null;
   });
 
-  const [fotoLicenciaInternaPreview, setFotoLicenciaInternaPreview] = useState<string | null>(() => {
-    const cache = sessionStorage.getItem(storageKey);
-    return cache ? JSON.parse(cache).fotoLicenciaInternaPreview || null : null;
-  });
-
-  const [fotoLicenciaInterna, setFotoLicenciaInterna] = useState<File | null>(() => {
-    const cache = sessionStorage.getItem(storageKey);
-    if (cache) {
-      const data = JSON.parse(cache);
-      if (data.fotoLicenciaInternaPreview) {
-        return base64ToFile(data.fotoLicenciaInternaPreview, `licencia_interna_frontal_${patenteValida}.jpg`);
-      }
+  const [nombreConductor, setNombreConductor] = useState<string>(() => {
+    try {
+      const cache = sessionStorage.getItem(storageKey);
+      return cache ? JSON.parse(cache).nombreConductor || '' : '';
+    } catch {
+      return '';
     }
-    return null;
   });
 
-  const [fotoLicenciaInternaTraseraPreview, setFotoLicenciaInternaTraseraPreview] = useState<string | null>(() => {
-    const cache = sessionStorage.getItem(storageKey);
-    return cache ? JSON.parse(cache).fotoLicenciaInternaTraseraPreview || null : null;
-  });
-
-  const [fotoLicenciaInternaTrasera, setFotoLicenciaInternaTrasera] = useState<File | null>(() => {
-    const cache = sessionStorage.getItem(storageKey);
-    if (cache) {
-      const data = JSON.parse(cache);
-      if (data.fotoLicenciaInternaTraseraPreview) {
-        return base64ToFile(data.fotoLicenciaInternaTraseraPreview, `licencia_interna_trasera_${patenteValida}.jpg`);
-      }
+  const [rutConductor, setRutConductor] = useState<string>(() => {
+    try {
+      const cache = sessionStorage.getItem(storageKey);
+      return cache ? JSON.parse(cache).rutConductor || '' : '';
+    } catch {
+      return '';
     }
-    return null;
   });
+
+  const [fotoLicenciaPreview, setFotoLicenciaPreview] = useState<string | null>(null);
+  const [fotoLicencia, setFotoLicencia] = useState<File | null>(null);
+
+  const [fotoLicenciaInternaPreview, setFotoLicenciaInternaPreview] = useState<string | null>(null);
+  const [fotoLicenciaInterna, setFotoLicenciaInterna] = useState<File | null>(null);
+
+  const [fotoLicenciaInternaTraseraPreview, setFotoLicenciaInternaTraseraPreview] = useState<string | null>(null);
+  const [fotoLicenciaInternaTrasera, setFotoLicenciaInternaTrasera] = useState<File | null>(null);
 
   const [encuestaCompletada, setEncuestaCompletada] = useState(false);
   const [bloqueado, setBloqueado] = useState(false);
@@ -178,30 +204,25 @@ export default function VistaConductor() {
 
   const [kilometrajeActual, setKilometrajeActual] = useState<number | null>(null);
   const [kilometrajeAnterior, setKilometrajeAnterior] = useState<number>(0);
-  const [kilometraje, setKilometraje] = useState(() => {
-    const cache = sessionStorage.getItem(storageKey);
-    return cache ? JSON.parse(cache).kilometraje || '' : '';
-  });
-
-  const [fotoPreview, setFotoPreview] = useState<string | null>(() => {
-    const cache = sessionStorage.getItem(storageKey);
-    return cache ? JSON.parse(cache).fotoPreview || null : null;
-  });
-
-  const [fotoFile, setFotoFile] = useState<File | null>(() => {
-    const cache = sessionStorage.getItem(storageKey);
-    if (cache) {
-      const data = JSON.parse(cache);
-      if (data.fotoPreview) {
-        return base64ToFile(data.fotoPreview, `tablero_${patenteValida}.jpg`);
-      }
+  const [kilometraje, setKilometraje] = useState<string>(() => {
+    try {
+      const cache = sessionStorage.getItem(storageKey);
+      return cache ? JSON.parse(cache).kilometraje || '' : '';
+    } catch {
+      return '';
     }
-    return null;
   });
+
+  const [fotoPreview, setFotoPreview] = useState<string | null>(null);
+  const [fotoFile, setFotoFile] = useState<File | null>(null);
 
   const [respuestasChecklist, setRespuestasChecklist] = useState<Record<string, string>>(() => {
-    const cache = sessionStorage.getItem(storageKey);
-    return cache ? JSON.parse(cache).respuestasChecklist || {} : {};
+    try {
+      const cache = sessionStorage.getItem(storageKey);
+      return cache ? JSON.parse(cache).respuestasChecklist || {} : {};
+    } catch {
+      return {};
+    }
   });
 
   const [subiendo, setSubiendo] = useState(false);
@@ -232,37 +253,34 @@ export default function VistaConductor() {
     return () => unsub();
   }, []);
 
+  // Persistencia segura: NO guarda strings Base64 gigantescos para evitar QuotaExceededError
   useEffect(() => {
     if (!patenteValida) return;
-    const datosCache = {
-      identificado,
-      nombreConductor,
-      rutConductor,
-      fotoLicenciaPreview,
-      fotoLicenciaInternaPreview,
-      fotoLicenciaInternaTraseraPreview,
-      kilometraje,
-      fotoPreview,
-      respuestasChecklist,
-      ubicacionGPS
-    };
-    sessionStorage.setItem(storageKey, JSON.stringify(datosCache));
+    try {
+      const datosCache = {
+        identificado,
+        nombreConductor,
+        rutConductor,
+        kilometraje,
+        respuestasChecklist,
+        ubicacionGPS
+      };
+      sessionStorage.setItem(storageKey, JSON.stringify(datosCache));
+    } catch (err) {
+      console.warn("No se pudo escribir en sessionStorage por cuota:", err);
+    }
   }, [
     identificado,
     nombreConductor,
     rutConductor,
-    fotoLicenciaPreview,
-    fotoLicenciaInternaPreview,
-    fotoLicenciaInternaTraseraPreview,
     kilometraje,
-    fotoPreview,
     respuestasChecklist,
     ubicacionGPS,
     patenteValida,
     storageKey
   ]);
 
-  // CORRECCIÓN: Carga del vehículo a prueba de cierres de estado (stale closures)
+  // Carga robusta del vehículo desde Firestore
   useEffect(() => {
     const cargarVehiculo = async () => {
       if (!patenteValida) {
@@ -281,10 +299,9 @@ export default function VistaConductor() {
           const kmRealAnterior = Number(vData.kilometrajeActual) || 0;
           setKilometrajeAnterior(kmRealAnterior);
           
-          // Se usa la función callback de setKilometraje para asegurar que toma el valor actual
           setKilometraje((prev: string) => prev ? prev : (kmRealAnterior > 0 ? kmRealAnterior.toString() : ''));
         } else {
-          console.warn(`No se encontró el vehículo con patente ${patenteValida}`);
+          console.warn(`No se encontró vehículo con patente ${patenteValida}`);
         }
       } catch (error) {
         console.error("Error al cargar vehículo desde Firebase:", error);
@@ -323,23 +340,30 @@ export default function VistaConductor() {
     }
   };
 
+  // Captura de Licencia Interna Frontal optimizada
   const capturarLicenciaInternaFrontal = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       setFotoLicenciaInterna(file);
-      const reader = new FileReader();
-      reader.onload = (event) => setFotoLicenciaInternaPreview(event.target?.result as string);
-      reader.readAsDataURL(file);
+      crearPreviewImagen(file, (url) => setFotoLicenciaInternaPreview(url));
     }
   };
 
+  // Captura de Licencia Interna Trasera optimizada
   const capturarLicenciaInternaTrasera = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       setFotoLicenciaInternaTrasera(file);
-      const reader = new FileReader();
-      reader.onload = (event) => setFotoLicenciaInternaTraseraPreview(event.target?.result as string);
-      reader.readAsDataURL(file);
+      crearPreviewImagen(file, (url) => setFotoLicenciaInternaTraseraPreview(url));
+    }
+  };
+
+  // Captura de Foto del Tablero optimizada
+  const capturarFotoTablero = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setFotoFile(file);
+      crearPreviewImagen(file, (url) => setFotoPreview(url));
     }
   };
 
@@ -390,16 +414,6 @@ export default function VistaConductor() {
   const preguntasVehiculoBase = preguntasBasePorTipo[tipoActual as keyof typeof preguntasBasePorTipo] || preguntasBasePorTipo['Camioneta'];
 
   const preguntasDinamicas = [...preguntasPrevencionRemotas, ...preguntasVehiculoBase];
-
-  const capturarFotoTablero = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setFotoFile(file);
-      const reader = new FileReader();
-      reader.onload = (event) => setFotoPreview(event.target?.result as string);
-      reader.readAsDataURL(file);
-    }
-  };
 
   const manejarEnvioChecklist = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
