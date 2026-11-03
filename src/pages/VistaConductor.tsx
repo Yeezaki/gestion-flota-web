@@ -7,7 +7,6 @@ import { db, storage } from '../lib/firebase';
 import IdentificacionConductor from '../components/conductor/IdentificacionConductor';
 import TestCognitivo from '../components/conductor/TestCognitivo';
 import TestSeguimiento from '../components/conductor/TestSeguimiento';
-import TestTrazoContinuo from '../components/conductor/TestTrazoContinuo';
 import TestMemoriaSecuencia from '../components/conductor/TestMemoriaSecuencia';
 import FormChecklist from '../components/conductor/FormChecklist';
 import ResumenConductor from '../components/conductor/ResumenConductor';
@@ -26,15 +25,15 @@ import type {
   SafetyDocumentType
 } from '../constants';
 
-type TipoTestPVT = 'reaccion' | 'seguimiento' | 'trazo' | 'memoria';
+type TipoTestPVT = 'reaccion' | 'seguimiento' | 'memoria';
 
 const preguntasBasePorTipo = {
   'Tracto camión': [
     { id: 'presiones_tablero', texto: '¿Los indicadores de presion (aceite, aire/vacio) marcan niveles normales?', esCritica: true },
     { id: 'frenos_servicio', texto: '¿El freno de pie y el de emergencia funcionan bien y sin fugas de aire?', esCritica: true },
     { id: 'volante_direccion', texto: '¿El volante y la direccion operan correctamente sin juego excesivo?', esCritica: true },
-    { id: 'parabrisas_limpiadores', texto: '¿El parabrisas esta sin fisuras graves y los limpiaparabrisas funcionan?', esCritica: false },
-    { id: 'espejos_retrovisores', texto: '¿Los espejos retrovisores estan en buen estado y bien ajustados?', esCritica: false },
+    { id: 'parabrisas_limpiadores', texto: '¿El parabrisas esta sin fisuras graves y los limpiaparabrisas funcionan?', esCritica: true },
+    { id: 'espejos_retrovisores', texto: '¿Los espejos retrovisores estan en buen estado y bien ajustados?', esCritica: true },
     { id: 'luces_frontales', texto: '¿Faros principales, direccionales y luces de galibo frontales encienden?', esCritica: true },
     { id: 'luces_traseras', texto: '¿Luces de freno, reversa y direccionales traseras operan sin problemas?', esCritica: true },
     { id: 'neumaticos_tracto', texto: '¿Las llantas tienen buena huella, presion correcta y los birlos estan completos?', esCritica: true },
@@ -44,9 +43,9 @@ const preguntasBasePorTipo = {
     { id: 'equipo_emergencia', texto: '¿Lleva extintor cargado, botiquin, triangulos, gato hidraulico y llave de rueda?', esCritica: true }
   ],
   'Semirremolque': [
-    { id: 'estado_carroceria', texto: '¿La carroceria se encuentra sin abolladuras, corrosion ni elementos sueltos?', esCritica: false },
+    { id: 'estado_carroceria', texto: '¿La carroceria se encuentra sin abolladuras, corrosion ni elementos sueltos?', esCritica: true },
     { id: 'luces_remolque', texto: '¿Las luces de posicion, intermitentes, freno y galibo estan operativas?', esCritica: true },
-    { id: 'huincha_reflectante', texto: '¿La huincha reflectante en el chasis esta visible y en buen estado?', esCritica: false },
+    { id: 'huincha_reflectante', texto: '¿La huincha reflectante en el chasis esta visible y en buen estado?', esCritica: true },
     { id: 'neumaticos_remolque', texto: '¿Los neumaticos (incluido el de repuesto) estan sin danos y con presion correcta?', esCritica: true },
     { id: 'patines_apoyo', texto: '¿Los patines de apoyo (patas) suben, bajan y se aseguran correctamente?', esCritica: true },
     { id: 'conexiones_tracto', texto: '¿Las lineas electricas y conexiones de frenos de aire hacia el tracto estan sin fugas?', esCritica: true },
@@ -58,9 +57,9 @@ const preguntasBasePorTipo = {
   'Camioneta': [
     { id: 'luces_altas_bajas', texto: '¿Las luces altas, bajas y de estacionamiento encienden correctamente?', esCritica: true },
     { id: 'luces_freno_interm', texto: '¿Las luces de freno, retroceso e intermitentes estan operativas?', esCritica: true },
-    { id: 'alarmas_bocina', texto: '¿La alarma de retroceso y la bocina suenan de forma clara?', esCritica: false },
-    { id: 'parabrisas_visibilidad', texto: '¿El parabrisas esta limpio, sin trizaduras y los limpiaparabrisas limpian bien?', esCritica: false },
-    { id: 'espejos_camioneta', texto: '¿Los espejos laterales y el retrovisor interior estan ajustados y sin danos?', esCritica: false },
+    { id: 'alarmas_bocina', texto: '¿La alarma de retroceso y la bocina suenan de forma clara?', esCritica: true },
+    { id: 'parabrisas_visibilidad', texto: '¿El parabrisas esta limpio, sin trizaduras y los limpiaparabrisas limpian bien?', esCritica: true },
+    { id: 'espejos_camioneta', texto: '¿Los espejos laterales y el retrovisor interior estan ajustados y sin danos?', esCritica: true },
     { id: 'cinturones_seguridad', texto: '¿Todos los cinturones de seguridad enganchan y retraen correctamente?', esCritica: true },
     { id: 'neumaticos_camioneta', texto: '¿Los neumaticos (delanteros, traseros y repuesto) tienen buena huella y presion?', esCritica: true },
     { id: 'frenos_camioneta', texto: '¿El pedal de freno y el freno de mano retienen el vehiculo adecuadamente?', esCritica: true },
@@ -242,7 +241,7 @@ export default function VistaConductor() {
       const preguntas = snap.docs.map(d => ({
         id: `prev_${d.id}`,
         texto: d.data().texto,
-        esCritica: d.data().esCritica ?? true,
+        esCritica: true,
         origen: 'prevencion'
       }));
       setPreguntasPrevencionRemotas(preguntas);
@@ -318,7 +317,7 @@ export default function VistaConductor() {
   }, [encuestaCompletada]);
 
   const seleccionarParejaAleatoria = (): [TipoTestPVT, TipoTestPVT] => {
-    const catalogo: TipoTestPVT[] = ['reaccion', 'seguimiento', 'trazo', 'memoria'];
+    const catalogo: TipoTestPVT[] = ['reaccion', 'seguimiento', 'memoria'];
     const barajado = [...catalogo].sort(() => Math.random() - 0.5);
     return [barajado[0], barajado[1]];
   };
@@ -439,9 +438,11 @@ export default function VistaConductor() {
 
     setSubiendo(true);
 
+    // Criterio estricto: cualquier "NO" activa falla critica y rechaza el vehiculo
     let tieneFallaCritica = false;
     preguntasDinamicas.forEach((p) => {
-      if (respuestasChecklist[p.id] === 'no' && p.esCritica) {
+      const resp = String(respuestasChecklist[p.id] || '').toLowerCase().trim();
+      if (resp === 'no') {
         tieneFallaCritica = true;
       }
     });
@@ -666,8 +667,6 @@ export default function VistaConductor() {
         return <TestCognitivo onFinalizado={procesarResultadoTestGenerico} />;
       case 'seguimiento':
         return <TestSeguimiento onFinalizado={procesarResultadoTestGenerico} />;
-      case 'trazo':
-        return <TestTrazoContinuo onFinalizado={procesarResultadoTestGenerico} />;
       case 'memoria':
         return <TestMemoriaSecuencia onFinalizado={procesarResultadoTestGenerico} />;
       default:
@@ -768,7 +767,6 @@ export default function VistaConductor() {
     setIdentificado(true);
   };
 
-  // Funcion para volver al checklist manteniendo identificacion y tests aprobados
   const handleRehacerChecklist = () => {
     setRespuestasChecklist({});
     setFotoPreview(null);
@@ -828,7 +826,6 @@ export default function VistaConductor() {
             </p>
           </div>
 
-          {/* Carga de Licencia Interna de Faena (Ambos Lados) */}
           <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 mb-5 text-left">
             <label className="block text-xs font-black text-slate-700 uppercase mb-1">
               Licencia Interna de Faena (Ambos Lados)
@@ -838,7 +835,6 @@ export default function VistaConductor() {
             </p>
 
             <div className="grid grid-cols-2 gap-2.5">
-              {/* Cara Frontal */}
               <label className="block cursor-pointer">
                 <input
                   type="file"
@@ -868,7 +864,6 @@ export default function VistaConductor() {
                 </div>
               </label>
 
-              {/* Cara Trasera */}
               <label className="block cursor-pointer">
                 <input
                   type="file"
