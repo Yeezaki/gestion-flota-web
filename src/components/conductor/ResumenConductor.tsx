@@ -12,6 +12,7 @@ type ResumenConductorProps = {
   forzarDescarga: (url: string, nombreArchivo: string) => void;
   calcularEstadoVencimiento: (fecha: string) => { texto: string; clase: string };
   onFinalizarJornada: () => void;
+  onRehacerChecklist?: () => void;
 };
 
 interface TallerItem {
@@ -41,13 +42,13 @@ export default function ResumenConductor({
   vehiculo,
   forzarDescarga,
   calcularEstadoVencimiento,
-  onFinalizarJornada
+  onFinalizarJornada,
+  onRehacerChecklist
 }: ResumenConductorProps) {
   const [talleres, setTalleres] = useState<TallerItem[]>([]);
   const [tallerSeleccionado, setTallerSeleccionado] = useState<string>('');
   const [cargandoTalleres, setCargandoTalleres] = useState(false);
 
-  // Estados del agendamiento
   const [mostrarModalAgendar, setMostrarModalAgendar] = useState(false);
   const [fechaSeleccionada, setFechaSeleccionada] = useState<string>(() => {
     const manana = new Date();
@@ -55,7 +56,7 @@ export default function ResumenConductor({
     return manana.toISOString().slice(0, 10);
   });
   const [horaSeleccionada, setHoraSeleccionada] = useState<string>('09:30');
-  const [motivoIngreso, setMotivoIngreso] = useState<string>('Falla crítica detectada en checklist diario');
+  const [motivoIngreso, setMotivoIngreso] = useState<string>('Falla critica detectada en checklist diario');
   const [guardandoCita, setGuardandoCita] = useState(false);
   const [citaAgendada, setCitaAgendada] = useState<{ fecha: string; hora: string; taller: string } | null>(null);
 
@@ -93,7 +94,7 @@ export default function ResumenConductor({
         if (lista.length === 0) {
           lista.push({
             id: 'taller-central',
-            nombre: 'Taller Mecánico Central',
+            nombre: 'Taller Mecanico Central',
             direccion: 'Base Operacional'
           });
         }
@@ -122,7 +123,6 @@ export default function ResumenConductor({
       const tallerObj = talleres.find((t) => t.id === tallerSeleccionado);
       const nombreTaller = tallerObj?.nombre || 'Taller de Flota';
 
-      // 1. Guardar cita para que la lea el usuario taller y administración
       await addDoc(collection(db, 'agenda_taller'), {
         patente: idPatente.toUpperCase(),
         conductorNombre: nombreConductor,
@@ -138,11 +138,10 @@ export default function ResumenConductor({
         origen: 'bloqueo_checklist_conductor'
       });
 
-      // 2. Historial de auditoría
       await addDoc(collection(db, 'historial_acciones'), {
         usuario: `${nombreConductor} (${rutConductor})`,
         accion: 'AGENDAMIENTO_TALLER_CONDUCTOR',
-        detalles: `Vehículo ${idPatente.toUpperCase()} agendado en ${nombreTaller} para el ${fechaSeleccionada} a las ${horaSeleccionada} hrs.`,
+        detalles: `Vehiculo ${idPatente.toUpperCase()} agendado en ${nombreTaller} para el ${fechaSeleccionada} a las ${horaSeleccionada} hrs.`,
         fecha: serverTimestamp()
       });
 
@@ -195,7 +194,7 @@ export default function ResumenConductor({
   const renderPautaInfo = (url: string, nombreArchivo: string) => (
     <div className="p-3 rounded-2xl border border-blue-200/80 bg-blue-50/70 backdrop-blur-sm flex flex-col justify-between items-center shadow-sm">
       <div className="flex flex-col items-center w-full mb-2">
-        <span className="text-[10px] uppercase font-black text-blue-900 mb-1 text-center">Pauta Mantención</span>
+        <span className="text-[10px] uppercase font-black text-blue-900 mb-1 text-center">Pauta Mantencion</span>
         <span className="text-xs font-black text-blue-950">Oficial Flota</span>
         <span className="text-[10px] font-bold text-blue-700 leading-tight mt-1 text-center">Vigente</span>
       </div>
@@ -246,10 +245,10 @@ export default function ResumenConductor({
             </div>
             <div>
               <div className="text-xs font-black uppercase text-rose-700 tracking-wide">
-                Vehículo Bloqueado para Operación
+                Vehiculo Bloqueado para Operacion
               </div>
               <p className="text-xs text-rose-600 font-medium mt-0.5">
-                Se registraron observaciones críticas en el checklist del vehículo. Debe ser coordinado su ingreso a taller.
+                Se registraron observaciones criticas en el checklist del vehiculo. Debe ser coordinado su ingreso a taller.
               </p>
             </div>
           </div>
@@ -258,13 +257,13 @@ export default function ResumenConductor({
             {citaAgendada ? (
               <div className="bg-emerald-50 border border-emerald-300 rounded-xl p-3.5 text-center space-y-1">
                 <div className="text-xs font-black uppercase text-emerald-800 tracking-wide">
-                  Hora Agendada con Éxito
+                  Hora Agendada con Exito
                 </div>
                 <p className="text-xs text-emerald-700 font-medium">
-                  {citaAgendada.taller} — {citaAgendada.fecha} a las {citaAgendada.hora} hrs.
+                  {citaAgendada.taller} - {citaAgendada.fecha} a las {citaAgendada.hora} hrs.
                 </p>
                 <p className="text-[10px] text-emerald-600">
-                  El equipo de taller ha sido notificado para la recepción de la unidad.
+                  El equipo de taller ha sido notificado para la recepcion de la unidad.
                 </p>
               </div>
             ) : (
@@ -304,33 +303,47 @@ export default function ResumenConductor({
         </div>
       ) : (
         <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-center space-y-1">
-          <div className="text-xs font-black uppercase text-emerald-700 tracking-wide">Vehículo Habilitado</div>
+          <div className="text-xs font-black uppercase text-emerald-700 tracking-wide">Vehiculo Habilitado</div>
           <p className="text-xs text-emerald-600">Checklist y pruebas validadas correctamente para la jornada.</p>
         </div>
       )}
 
       {/* Grid de documentos */}
       <div className="space-y-2">
-        <h3 className="text-xs font-black uppercase tracking-wider text-slate-600">Documentación del Vehículo</h3>
+        <h3 className="text-xs font-black uppercase tracking-wider text-slate-600">Documentacion del Vehiculo</h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          {renderDocInfo('Permiso Circulación', vehiculo?.fechaPermisoCirculacion, vehiculo?.urlPermisoCirculacion, `Permiso_${idPatente}.pdf`)}
-          {renderDocInfo('Revisión Técnica', vehiculo?.fechaRevisionTecnica, vehiculo?.urlRevisionTecnica, `Revision_${idPatente}.pdf`)}
+          {renderDocInfo('Permiso Circulacion', vehiculo?.fechaPermisoCirculacion, vehiculo?.urlPermisoCirculacion, `Permiso_${idPatente}.pdf`)}
+          {renderDocInfo('Revision Tecnica', vehiculo?.fechaRevisionTecnica, vehiculo?.urlRevisionTecnica, `Revision_${idPatente}.pdf`)}
           {renderDocInfo('Seguro Obligatorio', vehiculo?.fechaSeguroObligatorio, vehiculo?.urlSeguroObligatorio, `Seguro_${idPatente}.pdf`)}
           {renderPautaInfo(vehiculo?.urlPautaMantenimiento, `Pauta_${idPatente}.pdf`)}
         </div>
       </div>
 
+      {/* Botones de Accion Final */}
       <div className="pt-2 flex flex-col sm:flex-row gap-3">
+        {onRehacerChecklist && (
+          <button
+            type="button"
+            onClick={onRehacerChecklist}
+            className="w-full sm:w-1/2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-4 rounded-2xl transition-all shadow-md active:scale-95 text-xs sm:text-sm text-center flex items-center justify-center gap-2"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Volver a hacer Checklist
+          </button>
+        )}
+
         <button
           type="button"
           onClick={onFinalizarJornada}
-          className="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-3.5 px-4 rounded-2xl transition-all shadow-md active:scale-95 text-xs sm:text-sm text-center"
+          className={`w-full ${onRehacerChecklist ? 'sm:w-1/2' : ''} bg-slate-800 hover:bg-slate-900 text-white font-bold py-3.5 px-4 rounded-2xl transition-all shadow-md active:scale-95 text-xs sm:text-sm text-center`}
         >
           Finalizar Jornada
         </button>
       </div>
 
-      {/* Modal de Agendamiento con Calendario y Horas Predeterminadas */}
+      {/* Modal de Agendamiento */}
       {mostrarModalAgendar && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 p-4 backdrop-blur-sm flex justify-center items-center">
           <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl p-6 border border-slate-200 space-y-5 animate-fade-in">
@@ -387,7 +400,7 @@ export default function ResumenConductor({
 
               <div>
                 <label className="block text-xs font-black uppercase text-slate-700 mb-1">
-                  Motivo / Observación
+                  Motivo / Observacion
                 </label>
                 <textarea
                   value={motivoIngreso}

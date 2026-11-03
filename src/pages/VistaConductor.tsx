@@ -70,7 +70,6 @@ const preguntasBasePorTipo = {
   ]
 };
 
-// Conversión segura de Base64 a File sin riesgo de excepción
 const base64ToFile = (base64String: string | null | undefined, filename: string): File | null => {
   if (!base64String || typeof base64String !== 'string' || !base64String.includes(',')) {
     return null;
@@ -91,7 +90,6 @@ const base64ToFile = (base64String: string | null | undefined, filename: string)
   }
 };
 
-// Genera una versión liviana de la foto (máx 1024px, 70% calidad) para la vista previa
 const crearPreviewImagen = (file: File, callback: (preview: string) => void) => {
   const reader = new FileReader();
   reader.onload = (e) => {
@@ -253,7 +251,6 @@ export default function VistaConductor() {
     return () => unsub();
   }, []);
 
-  // Persistencia segura: NO guarda strings Base64 gigantescos para evitar QuotaExceededError
   useEffect(() => {
     if (!patenteValida) return;
     try {
@@ -267,7 +264,7 @@ export default function VistaConductor() {
       };
       sessionStorage.setItem(storageKey, JSON.stringify(datosCache));
     } catch (err) {
-      console.warn("No se pudo escribir en sessionStorage por cuota:", err);
+      console.warn("No se pudo escribir en sessionStorage:", err);
     }
   }, [
     identificado,
@@ -280,7 +277,6 @@ export default function VistaConductor() {
     storageKey
   ]);
 
-  // Carga robusta del vehículo desde Firestore
   useEffect(() => {
     const cargarVehiculo = async () => {
       if (!patenteValida) {
@@ -301,10 +297,10 @@ export default function VistaConductor() {
           
           setKilometraje((prev: string) => prev ? prev : (kmRealAnterior > 0 ? kmRealAnterior.toString() : ''));
         } else {
-          console.warn(`No se encontró vehículo con patente ${patenteValida}`);
+          console.warn(`No se encontro vehiculo con patente ${patenteValida}`);
         }
       } catch (error) {
-        console.error("Error al cargar vehículo desde Firebase:", error);
+        console.error("Error al cargar vehiculo desde Firebase:", error);
       } finally {
         setCargandoVehiculo(false);
       }
@@ -340,7 +336,6 @@ export default function VistaConductor() {
     }
   };
 
-  // Captura de Licencia Interna Frontal optimizada
   const capturarLicenciaInternaFrontal = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
@@ -349,7 +344,6 @@ export default function VistaConductor() {
     }
   };
 
-  // Captura de Licencia Interna Trasera optimizada
   const capturarLicenciaInternaTrasera = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
@@ -358,7 +352,6 @@ export default function VistaConductor() {
     }
   };
 
-  // Captura de Foto del Tablero optimizada
   const capturarFotoTablero = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
@@ -403,10 +396,10 @@ export default function VistaConductor() {
     const diferenciaTiempo = fechaVencimiento.getTime() - hoy.getTime();
     const diasRestantes = Math.round(diferenciaTiempo / (1000 * 3600 * 24));
 
-    if (diasRestantes < 0) return { texto: `Venció hace ${Math.abs(diasRestantes)}d`, clase: 'bg-red-100/70 text-red-700 border-red-300' };
+    if (diasRestantes < 0) return { texto: `Vencio hace ${Math.abs(diasRestantes)}d`, clase: 'bg-red-100/70 text-red-700 border-red-300' };
     if (diasRestantes === 0) return { texto: 'Vence hoy', clase: 'bg-red-100/70 text-red-700 border-red-300' };
     if (diasRestantes <= 15) return { texto: `Vence en ${diasRestantes}d`, clase: 'bg-orange-100/70 text-orange-700 border-orange-300' };
-    return { texto: `Al día (${diasRestantes}d)`, clase: 'bg-green-100/70 text-green-700 border-green-300' };
+    return { texto: `Al dia (${diasRestantes}d)`, clase: 'bg-green-100/70 text-green-700 border-green-300' };
   };
 
   let tipoActual = vehiculo?.tipo || 'Camioneta';
@@ -431,7 +424,7 @@ export default function VistaConductor() {
     if (kilometraje) {
       const kmNuevo = Number(kilometraje);
       if (kmNuevo < kilometrajeAnterior) {
-        alert(`Error: El kilometraje ingresado (${kmNuevo} km) no puede ser menor al último registro exacto (${kilometrajeAnterior} km).`);
+        alert(`Error: El kilometraje ingresado (${kmNuevo} km) no puede ser menor al ultimo registro exacto (${kilometrajeAnterior} km).`);
         return;
       }
       setKilometrajeActual(kmNuevo);
@@ -533,12 +526,12 @@ export default function VistaConductor() {
       if (tieneFallaCritica) {
         await registrarEnHistorial(
           'BLOQUEO_CHECKLIST',
-          `Vehículo ${patenteValida} bloqueado por fallas críticas en checklist. PVT aprobado (${puntajeGlobalPVT}%). Conductor: ${nombreConductor}`
+          `Vehiculo ${patenteValida} bloqueado por fallas criticas en checklist. PVT aprobado (${puntajeGlobalPVT}%). Conductor: ${nombreConductor}`
         );
       } else {
         await registrarEnHistorial(
           'CHECKLIST_COMPLETADO',
-          `Vehículo ${patenteValida} operativo. PVT: ${puntajeGlobalPVT}%. Conductor: ${nombreConductor}`
+          `Vehiculo ${patenteValida} operativo. PVT: ${puntajeGlobalPVT}%. Conductor: ${nombreConductor}`
         );
       }
 
@@ -581,7 +574,7 @@ export default function VistaConductor() {
 
     } catch (error) {
       console.error(error);
-      alert("Hubo un error al enviar el reporte. Verifica tu conexión a internet.");
+      alert("Hubo un error al enviar el reporte. Verifica tu conexion a internet.");
     } finally {
       setSubiendo(false);
     }
@@ -691,9 +684,9 @@ export default function VistaConductor() {
       });
       await registrarEnHistorial(
         'FIRMA_DOCUMENTO_SEGURIDAD',
-        `Conductor ${nombreConductor} firmó y tomó conocimiento de: ${SAFETY_DOCUMENTS[registro.documentoId]?.titulo}`
+        `Conductor ${nombreConductor} firmo y tomo conocimiento de: ${SAFETY_DOCUMENTS[registro.documentoId]?.titulo}`
       );
-      alert(`Documento firmado con éxito: ${SAFETY_DOCUMENTS[registro.documentoId]?.titulo}`);
+      alert(`Documento firmado con exito: ${SAFETY_DOCUMENTS[registro.documentoId]?.titulo}`);
     } catch (e) {
       console.error(e);
       alert('Error al guardar la firma en el servidor.');
@@ -709,13 +702,13 @@ export default function VistaConductor() {
       });
       await registrarEnHistorial(
         'EVALUACION_EMERGENCIA',
-        `Conductor ${nombreConductor} completó el checklist de emergencia. Puntaje: ${registro.puntaje}/${registro.totalPreguntas} (${registro.aprobado ? 'Aprobado' : 'Rechazado'})`
+        `Conductor ${nombreConductor} completo el checklist de emergencia. Puntaje: ${registro.puntaje}/${registro.totalPreguntas} (${registro.aprobado ? 'Aprobado' : 'Rechazado'})`
       );
-      alert('Evaluación de emergencia guardada con éxito.');
+      alert('Evaluacion de emergencia guardada con exito.');
       setMostrarChecklistEmergencia(false);
     } catch (e) {
       console.error(e);
-      alert('Error al guardar la evaluación de emergencia.');
+      alert('Error al guardar la evaluacion de emergencia.');
     }
   };
 
@@ -758,7 +751,7 @@ export default function VistaConductor() {
         `Conductor ${nombreConductor} (${rutConductor}) citado a control de alcohol y drogas para patente ${patenteValida}`
       );
     } catch (error) {
-      console.error("Error registrando citación a control de drogas:", error);
+      console.error("Error registrando citacion a control de drogas:", error);
     } finally {
       setRegistrandoNotificacionDrogas(false);
     }
@@ -775,9 +768,21 @@ export default function VistaConductor() {
     setIdentificado(true);
   };
 
+  // Funcion para volver al checklist manteniendo identificacion y tests aprobados
+  const handleRehacerChecklist = () => {
+    setRespuestasChecklist({});
+    setFotoPreview(null);
+    setFotoFile(null);
+    setTieneFirma(false);
+    setBloqueado(false);
+    setMotivoBloqueo(null);
+    setEncuestaCompletada(false);
+    setMostrarResumen(false);
+  };
+
   return (
     <div className="min-h-screen bg-cover bg-center bg-fixed bg-no-repeat flex flex-col items-center justify-center p-4 md:p-6 relative" style={{ backgroundImage: "url('/fondo-conductor.jpg')" }}>
-      {/* 1. Identificación */}
+      {/* 1. Identificacion */}
       {!identificado && (
         <IdentificacionConductor
           patente={patenteValida}
@@ -797,7 +802,7 @@ export default function VistaConductor() {
         />
       )}
 
-      {/* 2. Pantalla de Aviso: Selección para Control de Alcohol y Drogas + Licencia de Faena */}
+      {/* 2. Pantalla de Aviso: Seleccion para Control de Alcohol y Drogas + Licencia de Faena */}
       {identificado && !testDrogasNotificado && !bloqueado && (
         <div className="bg-white/95 backdrop-blur-md p-6 md:p-8 rounded-3xl shadow-2xl max-w-md w-full border border-amber-300 animate-fade-in relative z-10 text-center my-6">
           <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-3 shadow-inner">
@@ -819,7 +824,7 @@ export default function VistaConductor() {
               Has sido seleccionado para realizar el test de alcohol y drogas obligatorio.
             </p>
             <p className="text-xs text-amber-800 mt-1.5 font-medium">
-              Por favor, dirígete de inmediato al área de <strong>Prevención de Riesgos</strong> para la toma de la muestra antes de comenzar tu ruta.
+              Por favor, dirigete de inmediato al area de <strong>Prevencion de Riesgos</strong> para la toma de la muestra antes de comenzar tu ruta.
             </p>
           </div>
 
@@ -829,7 +834,7 @@ export default function VistaConductor() {
               Licencia Interna de Faena (Ambos Lados)
             </label>
             <p className="text-[11px] text-slate-500 mb-3">
-              Adjunta fotografía de la cara frontal y de la cara trasera de tu credencial de faena:
+              Adjunta fotografia de la cara frontal y de la cara trasera de tu credencial de faena:
             </p>
 
             <div className="grid grid-cols-2 gap-2.5">
@@ -900,7 +905,7 @@ export default function VistaConductor() {
             disabled={registrandoNotificacionDrogas}
             onClick={() => {
               if (!fotoLicenciaInternaPreview || !fotoLicenciaInternaTraseraPreview) {
-                const proceder = window.confirm("Aún no has adjuntado ambos lados de tu licencia interna de faena. ¿Deseas continuar a las pruebas?");
+                const proceder = window.confirm("Aun no has adjuntado ambos lados de tu licencia interna de faena. Deseas continuar a las pruebas?");
                 if (!proceder) return;
               }
               setTestDrogasNotificado(true);
@@ -916,7 +921,7 @@ export default function VistaConductor() {
       {identificado && testDrogasNotificado && !fasePVTCompletada && !bloqueado && (
         <div className="w-full flex flex-col items-center">
           <div className="mb-3 text-[11px] font-black uppercase tracking-wider text-slate-700 bg-white/70 backdrop-blur-sm px-4 py-1.5 rounded-full shadow-sm">
-            Batería Psicomotora: Prueba {testActualIndice + 1} de 2
+            Bateria Psicomotora: Prueba {testActualIndice + 1} de 2
           </div>
           {renderComponenteTest(parejaTests[testActualIndice])}
         </div>
@@ -936,9 +941,9 @@ export default function VistaConductor() {
           <h2 className="text-2xl font-black text-slate-800 mt-2">Aptitud Psicomotora</h2>
           
           <div className="bg-white/80 rounded-2xl p-4 my-5 border border-slate-200 shadow-sm">
-            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Calificación de Vigilia</div>
+            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Calificacion de Vigilia</div>
             <div className="text-4xl font-black text-blue-600 my-1">{puntajeGlobalPVT}%</div>
-            <p className="text-xs text-slate-600 font-medium">Reflejos y atención dentro de los rangos de seguridad.</p>
+            <p className="text-xs text-slate-600 font-medium">Reflejos y atencion dentro de los rangos de seguridad.</p>
           </div>
 
           <button
@@ -960,15 +965,15 @@ export default function VistaConductor() {
             </svg>
           </div>
 
-          <h1 className="text-2xl font-black text-red-700">VEHÍCULO BLOQUEADO</h1>
+          <h1 className="text-2xl font-black text-red-700">VEHICULO BLOQUEADO</h1>
 
           {motivoBloqueo === 'checklist' ? (
             <div className="mt-4 space-y-4">
               <p className="text-slate-700 text-sm font-medium">
-                Se detectaron una o más <strong>fallas críticas en el checklist de inspección y prevención</strong>. Por normativa de seguridad, este vehículo no puede iniciar ruta.
+                Se detectaron una o mas <strong>fallas criticas en el checklist de inspeccion y prevencion</strong>. Por normativa de seguridad, este vehiculo no puede iniciar ruta.
               </p>
               <div className="bg-green-50 border border-green-200 text-green-800 p-3 rounded-2xl text-xs font-bold flex items-center justify-center gap-2">
-                <span>Evaluación psicomotora: Aprobada ({puntajeGlobalPVT}%)</span>
+                <span>Evaluacion psicomotora: Aprobada ({puntajeGlobalPVT}%)</span>
               </div>
               <p className="text-xs text-slate-500 font-medium">
                 Debes coordinar la hora de ingreso al taller antes de finalizar la jornada.
@@ -1004,13 +1009,13 @@ export default function VistaConductor() {
               ) : (
                 <>
                   <p className="text-slate-700 text-sm font-medium">
-                    Evaluación psicomotora no superada (Puntaje: {puntajeGlobalPVT}%). Se detectaron indicios de fatiga, reflejos lentos o falta de atención.
+                    Evaluacion psicomotora no superada (Puntaje: {puntajeGlobalPVT}%). Se detectaron indicios de fatiga, reflejos lentos o falta de atencion.
                   </p>
                   <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-2xl text-xs font-bold">
-                    Bloqueo preventivo de seguridad. El checklist quedó inhabilitado.
+                    Bloqueo preventivo de seguridad. El checklist quedo inhabilitado.
                   </div>
                   <p className="text-xs text-slate-500 font-medium">
-                    Avisa al supervisor a cargo para reasignación o pausa reglamentaria.
+                    Avisa al supervisor a cargo para reasignacion o pausa reglamentaria.
                   </p>
                 </>
               )}
@@ -1036,7 +1041,7 @@ export default function VistaConductor() {
           <div className="bg-white/85 backdrop-blur-md rounded-2xl border border-white/60 p-5 shadow-xl space-y-4">
             <div>
               <h3 className="text-xs font-black uppercase tracking-wider text-slate-800">
-                Documentación y Seguridad de Operación
+                Documentacion y Seguridad de Operacion
               </h3>
               <p className="text-[11px] text-slate-600 font-medium">
                 Consulte las 2 hojas de cada protocolo obligatorio y confirme mediante su firma digital.
@@ -1049,7 +1054,7 @@ export default function VistaConductor() {
                 onClick={() => setDocSeleccionado('mapa_riesgo')}
                 className="p-3 rounded-xl border border-slate-200 bg-white hover:bg-blue-50/70 hover:border-blue-400 transition-all text-left shadow-sm flex flex-col justify-between"
               >
-                <span className="text-xs font-bold text-slate-800">Mapa de riesgo de conducción</span>
+                <span className="text-xs font-bold text-slate-800">Mapa de riesgo de conduccion</span>
                 <span className="text-[10px] text-blue-600 font-semibold mt-1">Ver 2 hojas y firmar</span>
               </button>
 
@@ -1058,7 +1063,7 @@ export default function VistaConductor() {
                 onClick={() => setDocSeleccionado('procedimiento_conduccion')}
                 className="p-3 rounded-xl border border-slate-200 bg-white hover:bg-blue-50/70 hover:border-blue-400 transition-all text-left shadow-sm flex flex-col justify-between"
               >
-                <span className="text-xs font-bold text-slate-800">Procedimiento de conducción</span>
+                <span className="text-xs font-bold text-slate-800">Procedimiento de conduccion</span>
                 <span className="text-[10px] text-blue-600 font-semibold mt-1">Ver 2 hojas y firmar</span>
               </button>
 
@@ -1067,7 +1072,7 @@ export default function VistaConductor() {
                 onClick={() => setDocSeleccionado('plan_transito')}
                 className="p-3 rounded-xl border border-slate-200 bg-white hover:bg-blue-50/70 hover:border-blue-400 transition-all text-left shadow-sm flex flex-col justify-between"
               >
-                <span className="text-xs font-bold text-slate-800">Plan de tránsito</span>
+                <span className="text-xs font-bold text-slate-800">Plan de transito</span>
                 <span className="text-[10px] text-blue-600 font-semibold mt-1">Ver 2 hojas y firmar</span>
               </button>
 
@@ -1087,7 +1092,7 @@ export default function VistaConductor() {
                 onClick={() => setMostrarChecklistEmergencia(true)}
                 className="px-4 py-2 text-xs font-bold text-white bg-slate-800 hover:bg-slate-900 rounded-xl shadow transition-colors"
               >
-                Realizar Evaluación de Emergencia (Cuestionario)
+                Realizar Evaluacion de Emergencia (Cuestionario)
               </button>
             </div>
           </div>
@@ -1127,6 +1132,7 @@ export default function VistaConductor() {
           vehiculo={vehiculo}
           forzarDescarga={forzarDescarga}
           calcularEstadoVencimiento={calcularEstadoVencimiento}
+          onRehacerChecklist={handleRehacerChecklist}
           onFinalizarJornada={() => {
             sessionStorage.removeItem(storageKey);
             setJornadaFinalizada(true);
@@ -1142,9 +1148,9 @@ export default function VistaConductor() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h1 className="text-3xl font-black text-slate-800 mb-4">¡Muchas gracias, {nombreConductor}!</h1>
+          <h1 className="text-3xl font-black text-slate-800 mb-4">Muchas gracias, {nombreConductor}!</h1>
           <p className="text-slate-600 text-base leading-relaxed mb-8 font-medium">
-            Tu reporte de checklist diario ha sido completado y guardado con éxito. ¡Que tengas una excelente jornada y un viaje muy seguro!
+            Tu reporte de checklist diario ha sido completado y guardado con exito. Que tengas una excelente jornada y un viaje muy seguro!
           </p>
           <button onClick={() => { sessionStorage.removeItem(storageKey); window.location.reload(); }} className="text-sm font-bold text-slate-600 hover:text-slate-900 transition-colors">
             Volver a escanear QR
