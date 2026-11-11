@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { LOGO_BASE64 } from '../constants';
 
@@ -33,6 +33,13 @@ export default function Login() {
         if (userDocSnap.exists()) {
           const data = userDocSnap.data();
 
+          if (data.activo === false) {
+            await signOut(auth);
+            setError('Acceso deshabilitado: Tu cuenta se encuentra inactiva.');
+            setCargando(false);
+            return;
+          }
+
           if (data.proyecto && data.proyecto !== ETIQUETA_PROYECTO) {
             await signOut(auth);
             setError('Acceso denegado: Esta cuenta pertenece a otra plataforma.');
@@ -42,7 +49,23 @@ export default function Login() {
 
           const rol = (data.rol || '').toLowerCase().trim();
 
-          if (rol === 'taller') {
+          // Registrar inicio de sesion en auditoria
+          try {
+            await addDoc(collection(db, 'historial_acciones'), {
+              usuario: user.email || 'Desconocido',
+              rol: rol || 'sin_rol',
+              accion: 'INICIO_SESION',
+              detalles: rol === 'admin_readonly' ? 'Ingreso de auditor (solo lectura)' : 'Ingreso al sistema',
+              fecha: serverTimestamp()
+            });
+          } catch (historialErr) {
+            console.error('Error al registrar historial de login:', historialErr);
+          }
+
+          // Ruteo por rol
+          if (rol === 'admin' || rol === 'admin_readonly' || rol === 'auditor') {
+            navigate('/admin');
+          } else if (rol === 'taller') {
             navigate('/taller');
           } else if (rol === 'generador_qr' || rol === 'generador') {
             navigate('/panel-generador');
@@ -54,6 +77,7 @@ export default function Login() {
             navigate('/admin');
           }
         } else {
+          // Si no existe documento en Firestore pero si en Auth, va a admin por defecto
           navigate('/admin');
         }
       } catch (firestoreErr) {

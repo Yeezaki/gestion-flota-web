@@ -1,41 +1,70 @@
-import { useState, useEffect } from 'react';
-import { collection, query, getDocs, deleteDoc, doc, where, updateDoc, addDoc, serverTimestamp, setDoc } from 'firebase/firestore';
-import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
-import { initializeApp, deleteApp } from 'firebase/app';
-import { db, auth, firebaseConfig } from '../../lib/firebase';
-import { ResponsiveTable } from '../common/ResponsiveTable';
+import React, { useState, useEffect } from 'react';
+import { 
+  collection, 
+  getDocs, 
+  setDoc,
+  updateDoc, 
+  deleteDoc, 
+  doc, 
+  serverTimestamp 
+} from 'firebase/firestore';
+import { initializeApp, getApps } from 'firebase/app';
+import { getAuth, createUserWithEmailAndPassword, signOut as secondarySignOut } from 'firebase/auth';
+import { db, auth } from '../../lib/firebase';
 
-export default function TabUsuarios() {
-  const [usuariosRegistrados, setUsuariosRegistrados] = useState<any[]>([]);
-  const [editandoUsuarioId, setEditandoUsuarioId] = useState<string | null>(null);
-  const [formUsuario, setFormUsuario] = useState({ 
-    email: '', password: '', rol: 'admin', nombreTaller: '', direccionTaller: '', ciudadTaller: '', especialidadTaller: 'Mecánica Integrada', limiteQR: 10,
-    razonSocial: '', telefono: '', direccion: ''
+export interface Usuario {
+  id?: string;
+  razonSocial?: string;
+  nombre?: string;
+  rut?: string;
+  email: string;
+  direccion?: string;
+  telefono?: string;
+  proyecto?: string;
+  rol: string;
+  activo?: boolean;
+  fechaCreacion?: any;
+}
+
+interface TabUsuariosProps {
+  readOnly?: boolean;
+}
+
+const ETIQUETA_PROYECTO = 'flota_app';
+
+export const TabUsuarios: React.FC<TabUsuariosProps> = ({ readOnly = false }) => {
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [guardando, setGuardando] = useState<boolean>(false);
+  const [modalAbierto, setModalAbierto] = useState<boolean>(false);
+  const [usuarioEditar, setUsuarioEditar] = useState<Usuario | null>(null);
+
+  const [formData, setFormData] = useState({
+    razonSocial: '',
+    rut: '',
+    email: '',
+    password: '',
+    direccion: '',
+    telefono: '',
+    rol: 'admin_readonly',
+    activo: true
   });
-  const [creandoUsuario, setCreandoUsuario] = useState(false);
 
-  const logAccion = async (accion: string, detalles: string) => {
-    try {
-      const user = auth.currentUser;
-      await addDoc(collection(db, 'historial_acciones'), {
-        usuario: user?.email || 'Desconocido',
-        accion,
-        detalles,
-        fecha: serverTimestamp()
-      });
-    } catch (e) {
-      console.error("Error al guardar en el historial", e);
-    }
-  };
+  const coleccionUsuarios = 'usuarios';
 
   const cargarUsuarios = async () => {
+    setLoading(true);
     try {
-      const q = query(collection(db, 'usuarios'), where('proyecto', '==', 'flota_app'));
-      const snap = await getDocs(q);
-      const users = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setUsuariosRegistrados(users);
+      const snap = await getDocs(collection(db, coleccionUsuarios));
+      const lista: Usuario[] = [];
+      snap.forEach((d) => {
+        lista.push({ id: d.id, ...d.data() } as Usuario);
+      });
+      setUsuarios(lista);
     } catch (error) {
-      console.error("Error al cargar usuarios:", error);
+      console.error('Error al cargar usuarios:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -43,285 +72,415 @@ export default function TabUsuarios() {
     cargarUsuarios();
   }, []);
 
-  const limpiarFormUsuario = () => {
-    setFormUsuario({ 
-      email: '', password: '', rol: 'admin', nombreTaller: '', direccionTaller: '', ciudadTaller: '', especialidadTaller: 'Mecánica Integrada', limiteQR: 10, razonSocial: '', telefono: '', direccion: '' 
+  const handleAbrirCrear = () => {
+    if (readOnly) return;
+    setUsuarioEditar(null);
+    setFormData({
+      razonSocial: '',
+      rut: '',
+      email: '',
+      password: '',
+      direccion: '',
+      telefono: '',
+      rol: 'admin_readonly',
+      activo: true
     });
-    setEditandoUsuarioId(null);
+    setModalAbierto(true);
   };
 
-  const guardarUsuario = async (e: React.FormEvent) => {
+  const handleAbrirEditar = (u: Usuario) => {
+    if (readOnly) return;
+    setUsuarioEditar(u);
+    setFormData({
+      razonSocial: u.razonSocial || u.nombre || '',
+      rut: u.rut || '',
+      email: u.email || '',
+      password: '',
+      direccion: u.direccion || '',
+      telefono: u.telefono || '',
+      rol: u.rol || 'conductor',
+      activo: u.activo ?? true
+    });
+    setModalAbierto(true);
+  };
+
+  const handleGuardar = async (e: React.FormEvent) => {
     e.preventDefault();
-    setCreandoUsuario(true);
+    if (readOnly || guardando) return;
+
+    setGuardando(true);
 
     try {
-      const datosUsuario: any = { 
-        rol: formUsuario.rol, 
-        proyecto: 'flota_app',
-        razonSocial: formUsuario.razonSocial,
-        telefono: formUsuario.telefono,
-        direccion: formUsuario.direccion
-      };
-
-      if (formUsuario.rol === 'taller') {
-        datosUsuario.nombreTaller = formUsuario.nombreTaller;
-        datosUsuario.direccionTaller = formUsuario.direccionTaller;
-        datosUsuario.ciudadTaller = formUsuario.ciudadTaller;
-        datosUsuario.especialidadTaller = formUsuario.especialidadTaller;
-      } else if (formUsuario.rol === 'generador_qr') {
-        datosUsuario.limiteQR = Number(formUsuario.limiteQR);
-      }
-
-      if (editandoUsuarioId) {
-        await updateDoc(doc(db, 'usuarios', editandoUsuarioId), datosUsuario);
-        await logAccion('EDITAR_USUARIO', `Se actualizó el perfil de: ${formUsuario.email} (Rol: ${formUsuario.rol})`);
-        alert("Usuario actualizado correctamente.");
+      if (usuarioEditar?.id) {
+        const ref = doc(db, coleccionUsuarios, usuarioEditar.id);
+        await updateDoc(ref, {
+          razonSocial: formData.razonSocial,
+          nombre: formData.razonSocial,
+          rut: formData.rut,
+          email: formData.email,
+          direccion: formData.direccion,
+          telefono: formData.telefono,
+          rol: formData.rol,
+          activo: formData.activo
+        });
       } else {
-        if (formUsuario.password.length < 6) {
-          alert("La contraseña debe tener al menos 6 caracteres.");
-          setCreandoUsuario(false);
+        if (!formData.password || formData.password.length < 6) {
+          alert('La contraseña debe tener al menos 6 caracteres.');
+          setGuardando(false);
           return;
         }
-        
-        const secondaryApp = initializeApp(firebaseConfig, "Secondary");
-        const secondaryAuth = getAuth(secondaryApp);
-        const userCredential = await createUserWithEmailAndPassword(secondaryAuth, formUsuario.email, formUsuario.password);
-        
-        await setDoc(doc(db, 'usuarios', userCredential.user.uid), {
-          email: formUsuario.email,
-          ...datosUsuario,
-          ...(formUsuario.rol === 'generador_qr' && { qrsCreados: 0 }),
+
+        const secondaryApp = getApps().find((a) => a.name === 'SecondaryAuthAdmin') 
+          || initializeApp(auth.app.options, 'SecondaryAuthAdmin');
+        const secondaryAuthInstance = getAuth(secondaryApp);
+
+        const cred = await createUserWithEmailAndPassword(
+          secondaryAuthInstance,
+          formData.email.trim(),
+          formData.password
+        );
+
+        const nuevoUid = cred.user.uid;
+        await secondarySignOut(secondaryAuthInstance);
+
+        await setDoc(doc(db, coleccionUsuarios, nuevoUid), {
+          razonSocial: formData.razonSocial,
+          nombre: formData.razonSocial,
+          rut: formData.rut,
+          email: formData.email.trim(),
+          direccion: formData.direccion,
+          telefono: formData.telefono,
+          rol: formData.rol,
+          proyecto: ETIQUETA_PROYECTO,
+          activo: formData.activo,
           fechaCreacion: serverTimestamp()
         });
-
-        await deleteApp(secondaryApp);
-        await logAccion('CREAR_USUARIO', `Se creó el usuario: ${formUsuario.email} (Rol: ${formUsuario.rol})`);
-        alert("Usuario creado exitosamente.");
       }
-      limpiarFormUsuario();
+
+      setModalAbierto(false);
       cargarUsuarios();
     } catch (error: any) {
-      console.error(error);
-      alert(`Error al guardar el usuario.`);
+      console.error('Error al procesar el usuario:', error);
+      if (error.code === 'auth/email-already-in-use') {
+        alert('El correo electronico ya esta registrado en el sistema.');
+      } else {
+        alert('Error: ' + (error.message || 'No se pudo guardar el usuario'));
+      }
     } finally {
-      setCreandoUsuario(false);
+      setGuardando(false);
     }
   };
 
-  const editarUsuario = (user: any) => {
-    setFormUsuario({
-      email: user.email,
-      password: '',
-      rol: user.rol || 'admin',
-      nombreTaller: user.nombreTaller || '',
-      direccionTaller: user.direccionTaller || user.ubicacionTaller || '',
-      ciudadTaller: user.ciudadTaller || '',
-      especialidadTaller: user.especialidadTaller || 'Mecánica Integrada',
-      limiteQR: user.limiteQR || 10,
-      razonSocial: user.razonSocial || user.nombreTaller || '',
-      telefono: user.telefono || '',
-      direccion: user.direccion || user.direccionTaller || user.ubicacionTaller || ''
-    });
-    setEditandoUsuarioId(user.id);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  const handleEliminar = async (id?: string) => {
+    if (readOnly || !id) return;
+    if (!window.confirm('¿Seguro que deseas eliminar este usuario?')) return;
 
-  const eliminarUsuario = async (id: string, email: string) => {
-    const confirmar = window.confirm("¿Eliminar el perfil de este usuario de la base de datos?");
-    if (!confirmar) return;
     try {
-      await deleteDoc(doc(db, 'usuarios', id));
-      await logAccion('ELIMINAR_USUARIO', `Se eliminó el usuario con correo: ${email}`);
+      await deleteDoc(doc(db, coleccionUsuarios, id));
       cargarUsuarios();
     } catch (error) {
-      console.error(error);
+      console.error('Error al eliminar usuario:', error);
     }
+  };
+
+  const renderBadgeRol = (rol: string) => {
+    const rolNorm = (rol || '').toLowerCase().trim();
+
+    if (rolNorm.includes('readonly') || rolNorm.includes('auditor')) {
+      return (
+        <span className="inline-block px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200">
+          ADMIN (SOLO LECTURA)
+        </span>
+      );
+    }
+
+    if (rolNorm === 'admin') {
+      return (
+        <span className="inline-block px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider bg-purple-50 text-purple-700 border border-purple-200">
+          ADMINISTRADOR
+        </span>
+      );
+    }
+
+    if (rolNorm.includes('taller')) {
+      return (
+        <span className="inline-block px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200">
+          TALLER MECÁNICO
+        </span>
+      );
+    }
+
+    if (rolNorm.includes('prevencion')) {
+      return (
+        <span className="inline-block px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200">
+          PREVENCIÓN
+        </span>
+      );
+    }
+
+    if (rolNorm.includes('torre')) {
+      return (
+        <span className="inline-block px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200">
+          TORRE DE CONTROL
+        </span>
+      );
+    }
+
+    if (rolNorm.includes('generador') || rolNorm.includes('qr')) {
+      return (
+        <span className="inline-block px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200">
+          GENERADOR QR
+        </span>
+      );
+    }
+
+    return (
+      <span className="inline-block px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-700 border border-slate-200">
+        CONDUCTOR
+      </span>
+    );
   };
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-      
-      <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-sm xl:col-span-4 h-fit">
-        <div className="mb-4 border-b border-slate-100 pb-3">
-          <h2 className="text-base sm:text-lg font-black text-slate-800">
-            {editandoUsuarioId ? 'Editar Perfil' : 'Crear Usuario'}
+    <div className="bg-white border border-slate-200/90 rounded-3xl p-4 sm:p-6 shadow-sm">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <div>
+          <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+            Usuarios del Sistema
           </h2>
-          <p className="text-xs text-slate-500">Gestiona los accesos al sistema.</p>
+          <p className="text-xs sm:text-sm text-slate-500 font-medium">
+            Gestión de roles y accesos a la plataforma
+          </p>
         </div>
 
-        <form onSubmit={guardarUsuario} className="space-y-3.5">
-          <div>
-            <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Correo Electrónico</label>
-            <input 
-              type="email" 
-              required 
-              disabled={!!editandoUsuarioId} 
-              value={formUsuario.email} 
-              onChange={(e) => setFormUsuario({...formUsuario, email: e.target.value})} 
-              className="w-full p-2.5 border border-slate-300 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:bg-slate-100" 
-              placeholder="usuario@empresa.com" 
-            />
-          </div>
-
-          {!editandoUsuarioId && (
-            <div>
-              <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Contraseña (Mínimo 6)</label>
-              <input 
-                type="password" 
-                required 
-                minLength={6} 
-                value={formUsuario.password} 
-                onChange={(e) => setFormUsuario({...formUsuario, password: e.target.value})} 
-                className="w-full p-2.5 border border-slate-300 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" 
-                placeholder="••••••••" 
-              />
-            </div>
-          )}
-
-          <div>
-            <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Tipo de Rol</label>
-            <select 
-              value={formUsuario.rol} 
-              onChange={(e) => setFormUsuario({...formUsuario, rol: e.target.value})} 
-              className="w-full p-2.5 border border-slate-300 rounded-xl text-xs sm:text-sm font-bold text-slate-700 bg-white"
-            >
-              <option value="admin">Administrador General</option>
-              <option value="prevencion_riesgo">Prevención de Riesgos</option>
-              <option value="torre_control">Torre de Control</option>
-              <option value="taller">Taller Externo Asociado</option>
-              <option value="generador_qr">Generador de QRs (Restringido)</option>
-            </select>
-          </div>
-
-          {formUsuario.rol === 'taller' && (
-            <div className="space-y-3 p-3 bg-blue-50/60 rounded-xl border border-blue-100">
-              <input type="text" required placeholder="Nombre del Taller" value={formUsuario.nombreTaller} onChange={(e) => setFormUsuario({...formUsuario, nombreTaller: e.target.value})} className="w-full p-2 bg-white border border-blue-200 rounded-lg text-xs" />
-              <input type="text" required placeholder="Especialidad (ej: Mecánica Integrada)" value={formUsuario.especialidadTaller} onChange={(e) => setFormUsuario({...formUsuario, especialidadTaller: e.target.value})} className="w-full p-2 bg-white border border-blue-200 rounded-lg text-xs" />
-              <input type="text" required placeholder="Dirección Exacta" value={formUsuario.direccionTaller} onChange={(e) => setFormUsuario({...formUsuario, direccionTaller: e.target.value})} className="w-full p-2 bg-white border border-blue-200 rounded-lg text-xs" />
-              <input type="text" required placeholder="Ciudad" value={formUsuario.ciudadTaller} onChange={(e) => setFormUsuario({...formUsuario, ciudadTaller: e.target.value})} className="w-full p-2 bg-white border border-blue-200 rounded-lg text-xs" />
-            </div>
-          )}
-
-          {formUsuario.rol === 'generador_qr' && (
-            <div className="space-y-3 p-3 bg-purple-50/60 rounded-xl border border-purple-100">
-              <input type="text" required placeholder="Razón Social / Empresa" value={formUsuario.razonSocial} onChange={(e) => setFormUsuario({...formUsuario, razonSocial: e.target.value})} className="w-full p-2 bg-white border border-purple-200 rounded-lg text-xs" />
-              <input type="text" required placeholder="Teléfono de Contacto" value={formUsuario.telefono} onChange={(e) => setFormUsuario({...formUsuario, telefono: e.target.value})} className="w-full p-2 bg-white border border-purple-200 rounded-lg text-xs" />
-              <input type="text" required placeholder="Dirección / Sede" value={formUsuario.direccion} onChange={(e) => setFormUsuario({...formUsuario, direccion: e.target.value})} className="w-full p-2 bg-white border border-purple-200 rounded-lg text-xs" />
-              <select value={formUsuario.limiteQR} onChange={(e) => setFormUsuario({...formUsuario, limiteQR: Number(e.target.value)})} className="w-full p-2 bg-white border border-purple-200 rounded-lg text-xs font-bold">
-                <option value={1}>Plan Básico (1 QR)</option>
-                <option value={10}>Plan Intermedio (10 QRs)</option>
-                <option value={20}>Plan Avanzado (20 QRs)</option>
-                <option value={50}>Plan Corporativo (50 QRs)</option>
-              </select>
-            </div>
-          )}
-
-          {(formUsuario.rol === 'prevencion_riesgo' || formUsuario.rol === 'torre_control') && (
-            <div className="space-y-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
-              <input type="text" required placeholder="Nombre Completo del Operador" value={formUsuario.razonSocial} onChange={(e) => setFormUsuario({...formUsuario, razonSocial: e.target.value})} className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs" />
-              <input type="text" placeholder="Teléfono Institucional" value={formUsuario.telefono} onChange={(e) => setFormUsuario({...formUsuario, telefono: e.target.value})} className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs" />
-            </div>
-          )}
-
-          <div className="flex gap-2 pt-2">
-            <button 
-              type="submit" 
-              disabled={creandoUsuario} 
-              className="flex-1 font-bold py-2.5 rounded-xl text-xs sm:text-sm bg-slate-800 hover:bg-slate-900 text-white transition-all shadow-sm"
-            >
-              {creandoUsuario ? 'Guardando...' : (editandoUsuarioId ? 'Guardar Cambios' : 'Crear Usuario')}
-            </button>
-            {editandoUsuarioId && (
-              <button 
-                type="button" 
-                onClick={limpiarFormUsuario} 
-                className="px-3 py-2.5 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-200"
-              >
-                Cancelar
-              </button>
-            )}
-          </div>
-        </form>
+        {!readOnly && (
+          <button
+            type="button"
+            onClick={handleAbrirCrear}
+            className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white rounded-2xl text-xs sm:text-sm font-bold transition-all shadow-sm whitespace-nowrap self-start sm:self-auto"
+          >
+            + Crear Usuario
+          </button>
+        )}
       </div>
 
-      <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-sm xl:col-span-8 space-y-4">
-        <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-          <h2 className="text-base sm:text-lg font-black text-slate-800">
-            Cuentas Registradas ({usuariosRegistrados.length})
-          </h2>
-        </div>
-
-        <ResponsiveTable minWidth="min-w-[650px]">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-100 text-slate-700">
-              <tr>
-                <th className="p-3">Correo (Auth)</th>
-                <th className="p-3">Detalle Perfil</th>
-                <th className="p-3 text-center">Acciones</th>
+      {loading ? (
+        <div className="py-12 text-center text-slate-400 text-xs">Cargando usuarios...</div>
+      ) : (
+        <div className="w-full overflow-x-auto">
+          <table className="w-full text-left text-xs min-w-[700px]">
+            <thead>
+              <tr className="border-b border-slate-200 text-slate-600 text-[11px] font-bold uppercase tracking-wider">
+                <th className="py-3 px-3">NOMBRE</th>
+                <th className="py-3 px-3">RUT</th>
+                <th className="py-3 px-3">EMAIL</th>
+                <th className="py-3 px-3">ROL</th>
+                <th className="py-3 px-3">ESTADO</th>
+                {!readOnly && <th className="py-3 px-3 text-right">ACCIONES</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {usuariosRegistrados.length === 0 ? (
-                <tr><td colSpan={3} className="p-6 text-center text-slate-400">Cargando usuarios...</td></tr>
-              ) : (
-                usuariosRegistrados.map((user) => (
-                  <tr key={user.id} className="hover:bg-slate-50">
-                    <td className="p-3">
-                      <span className="font-bold text-slate-800 block">{user.email}</span>
-                      <span className={`text-[10px] uppercase font-black px-2 py-0.5 rounded inline-block mt-1 ${
-                        user.rol === 'admin' ? 'bg-indigo-100 text-indigo-700' : 
-                        user.rol === 'taller' ? 'bg-blue-100 text-blue-700' :
-                        user.rol === 'prevencion_riesgo' ? 'bg-amber-100 text-amber-800' :
-                        user.rol === 'torre_control' ? 'bg-cyan-100 text-cyan-800' :
-                        'bg-purple-100 text-purple-700'
+              {usuarios.map((u) => {
+                const nombreMostrar = u.razonSocial || u.nombre || '';
+                return (
+                  <tr key={u.id} className="hover:bg-slate-50/70 transition-colors">
+                    <td className="py-3.5 px-3 font-bold text-slate-900">
+                      {nombreMostrar}
+                    </td>
+                    <td className="py-3.5 px-3 font-mono text-slate-600">
+                      {u.rut || ''}
+                    </td>
+                    <td className="py-3.5 px-3 font-mono text-slate-600">
+                      {u.email || ''}
+                    </td>
+                    <td className="py-3.5 px-3">
+                      {renderBadgeRol(u.rol)}
+                    </td>
+                    <td className="py-3.5 px-3">
+                      <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                        u.activo !== false 
+                          ? 'bg-emerald-100 text-emerald-800' 
+                          : 'bg-rose-100 text-rose-800'
                       }`}>
-                        {user.rol === 'prevencion_riesgo' ? 'Prevención' : user.rol === 'torre_control' ? 'Torre de Control' : user.rol}
+                        {u.activo !== false ? 'ACTIVO' : 'INACTIVO'}
                       </span>
                     </td>
-                    <td className="p-3 text-slate-600">
-                      {user.rol === 'taller' ? (
-                        <div>
-                          <p className="font-bold text-blue-700">{user.nombreTaller || 'Sin nombre'}</p>
-                          <p className="text-[11px] text-slate-500">{user.especialidadTaller} — {user.ciudadTaller || user.ubicacionTaller}</p>
-                        </div>
-                      ) : user.rol === 'generador_qr' ? (
-                        <div>
-                          <p className="font-bold text-purple-700">{user.razonSocial || 'Empresa No Definida'}</p>
-                          <p className="text-[11px] text-slate-500">Plan: {user.limiteQR} QRs | Tel: {user.telefono || 'N/A'}</p>
-                        </div>
-                      ) : user.rol === 'prevencion_riesgo' || user.rol === 'torre_control' ? (
-                        <div>
-                          <p className="font-bold text-slate-800">{user.razonSocial || 'Operador Institucional'}</p>
-                          <p className="text-[11px] text-slate-500">Tel: {user.telefono || 'N/A'}</p>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-slate-400 italic">Acceso Total Plataforma</span>
-                      )}
-                    </td>
-                    <td className="p-3 text-center">
-                      <div className="flex justify-center gap-1.5">
-                        <button 
-                          onClick={() => editarUsuario(user)} 
-                          className="text-xs font-bold px-2.5 py-1 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100"
+                    {!readOnly && (
+                      <td className="py-3.5 px-3 text-right whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => handleAbrirEditar(u)}
+                          className="text-blue-600 hover:text-blue-800 font-bold text-xs mr-3 transition-colors"
                         >
                           Editar
                         </button>
-                        <button 
-                          onClick={() => eliminarUsuario(user.id, user.email)} 
-                          className="text-xs font-bold px-2.5 py-1 bg-rose-50 text-rose-600 rounded-lg hover:bg-rose-100"
+                        <button
+                          type="button"
+                          onClick={() => handleEliminar(u.id)}
+                          className="text-rose-600 hover:text-rose-800 font-bold text-xs transition-colors"
                         >
-                          Borrar
+                          Eliminar
                         </button>
-                      </div>
-                    </td>
+                      </td>
+                    )}
                   </tr>
-                ))
-              )}
+                );
+              })}
             </tbody>
           </table>
-        </ResponsiveTable>
-      </div>
+        </div>
+      )}
 
+      {modalAbierto && !readOnly && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 border border-slate-100">
+            <h3 className="text-lg font-black text-slate-900 mb-4">
+              {usuarioEditar ? 'Editar Usuario' : 'Nuevo Usuario'}
+            </h3>
+
+            <form onSubmit={handleGuardar} className="space-y-4">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                  Nombre o Razón Social
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.razonSocial}
+                  onChange={(e) => setFormData({ ...formData, razonSocial: e.target.value })}
+                  className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  placeholder="Ej: Transportes Ecopanta SpA o Carlos Pérez"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                  RUT
+                </label>
+                <input
+                  type="text"
+                  value={formData.rut}
+                  onChange={(e) => setFormData({ ...formData, rut: e.target.value })}
+                  className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  placeholder="12.345.678-9"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  required
+                  disabled={!!usuarioEditar}
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:bg-slate-100 disabled:text-slate-500"
+                  placeholder="usuario@ecopanta.cl"
+                />
+              </div>
+
+              {!usuarioEditar && (
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                    Contraseña Inicial
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    minLength={6}
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    placeholder="Mínimo 6 caracteres"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                  Rol Asignado
+                </label>
+                <select
+                  value={formData.rol}
+                  onChange={(e) => setFormData({ ...formData, rol: e.target.value })}
+                  className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white cursor-pointer font-bold text-slate-700"
+                >
+                  <option value="admin">Administrador (Control Total)</option>
+                  <option value="admin_readonly">Admin Solo Lectura (Solo Ver / Auditor)</option>
+                  <option value="prevencion">Prevención de Riesgos</option>
+                  <option value="taller">Taller Mecánico</option>
+                  <option value="torre_control">Torre de Control</option>
+                  <option value="generador">Generador QR</option>
+                  <option value="conductor">Conductor</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                    Teléfono
+                  </label>
+                  <input
+                    type="tel"
+                    value={formData.telefono}
+                    onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
+                    className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    placeholder="+56 9 1234 5678"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                    Dirección
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.direccion}
+                    onChange={(e) => setFormData({ ...formData, direccion: e.target.value })}
+                    className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    placeholder="Faena / Ciudad"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="activoCheck"
+                  checked={formData.activo}
+                  onChange={(e) => setFormData({ ...formData, activo: e.target.checked })}
+                  className="h-4 w-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer"
+                />
+                <label htmlFor="activoCheck" className="text-xs font-bold text-slate-700 cursor-pointer">
+                  Usuario Activo
+                </label>
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  disabled={guardando}
+                  onClick={() => setModalAbierto(false)}
+                  className="px-4 py-2 border border-slate-300 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={guardando}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold disabled:bg-slate-400"
+                >
+                  {guardando ? 'Guardando...' : 'Guardar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
-}
+};
+
+export default TabUsuarios;

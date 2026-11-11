@@ -42,17 +42,37 @@ function RutaPrivada({ children, rolPermitido }: { children: React.ReactNode, ro
     return () => unsubscribe();
   }, []);
 
-  if (cargando) return <div className="min-h-screen bg-slate-50 flex items-center justify-center font-bold text-slate-400">Verificando accesos...</div>;
-  if (!usuario) return <Navigate to="/login" />;
-  
-  if (rolPermitido && rolUsuario !== rolPermitido && rolUsuario !== 'admin') {
-    if (rolUsuario === 'taller') return <Navigate to="/taller" />;
-    if (rolUsuario === 'generador_qr') return <Navigate to="/panel-generador" />;
-    if (rolUsuario === 'prevencion_riesgo') return <Navigate to="/prevencion" />;
-    if (rolUsuario === 'torre_control') return <Navigate to="/torre-control" />;
-    return <Navigate to="/admin" />;
+  if (cargando) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center font-bold text-slate-400">
+        Verificando accesos...
+      </div>
+    );
   }
-  
+
+  if (!usuario) return <Navigate to="/login" replace />;
+
+  const esAdminTotal = rolUsuario === 'admin';
+  const esAdminReadOnly = rolUsuario === 'admin_readonly';
+  const esAdminValido = esAdminTotal || esAdminReadOnly;
+
+  if (rolPermitido) {
+    // Si la ruta requiere 'admin', permitimos tanto al admin total como al de solo lectura
+    const tieneAcceso = 
+      rolUsuario === rolPermitido || 
+      (rolPermitido === 'admin' && esAdminValido) || 
+      esAdminTotal;
+
+    if (!tieneAcceso) {
+      if (rolUsuario === 'taller') return <Navigate to="/taller" replace />;
+      if (rolUsuario === 'generador_qr' || rolUsuario === 'generador') return <Navigate to="/panel-generador" replace />;
+      if (rolUsuario === 'prevencion_riesgo' || rolUsuario === 'prevencion') return <Navigate to="/prevencion" replace />;
+      if (rolUsuario === 'torre_control' || rolUsuario === 'torre') return <Navigate to="/torre-control" replace />;
+      if (esAdminValido) return <Navigate to="/admin" replace />;
+      return <Navigate to="/login" replace />;
+    }
+  }
+
   return <>{children}</>;
 }
 
@@ -60,7 +80,7 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Navigate to="/login" />} />
+        <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/v/:id" element={<VistaConductor />} />
         <Route path="/agendar/:id" element={<AgendarHora />} />
         <Route path="/login" element={<Login />} />

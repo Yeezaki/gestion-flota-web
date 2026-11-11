@@ -37,9 +37,10 @@ type FormEditState = {
 type TabFlotaProps = {
   busqueda: string;
   filtroTipoVehiculo: string;
+  readOnly?: boolean;
 };
 
-export default function TabFlota({ busqueda, filtroTipoVehiculo }: TabFlotaProps) {
+export default function TabFlota({ busqueda, filtroTipoVehiculo, readOnly = false }: TabFlotaProps) {
   const [vehiculos, setVehiculos] = useState<any[]>([]);
   const [usuariosRegistrados, setUsuariosRegistrados] = useState<any[]>([]);
   const [limiteVehiculos, setLimiteVehiculos] = useState(10);
@@ -110,6 +111,7 @@ export default function TabFlota({ busqueda, filtroTipoVehiculo }: TabFlotaProps
   }, [busqueda, filtroTipoVehiculo]);
 
   const eliminarVehiculo = async (id: string, patente: string) => {
+    if (readOnly) return;
     const confirmar = window.confirm("¿Estás seguro de que deseas eliminar este vehículo del sistema?");
     if (!confirmar) return;
 
@@ -130,6 +132,7 @@ export default function TabFlota({ busqueda, filtroTipoVehiculo }: TabFlotaProps
   };
 
   const editarVehiculoEnFormulario = (vehiculo: any) => {
+    if (readOnly) return;
     setVehiculoEditando(vehiculo);
     setPestanaModal('vehiculo');
     
@@ -177,7 +180,7 @@ export default function TabFlota({ busqueda, filtroTipoVehiculo }: TabFlotaProps
   };
 
   const eliminarDocumentoVehiculo = async (urlKey: keyof FormEditState, storageName: string, label: string) => {
-    if (!vehiculoEditando) return;
+    if (readOnly || !vehiculoEditando) return;
 
     const urlActual = formEdit[urlKey];
     if (!urlActual) {
@@ -207,7 +210,7 @@ export default function TabFlota({ busqueda, filtroTipoVehiculo }: TabFlotaProps
 
   const guardarEdicionVehiculo = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!vehiculoEditando) return;
+    if (readOnly || !vehiculoEditando) return;
 
     setGuardandoEdicion(true);
     try {
@@ -309,7 +312,11 @@ export default function TabFlota({ busqueda, filtroTipoVehiculo }: TabFlotaProps
         <div className="bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-100 w-full min-w-0">
           <div className="p-6 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
             <h2 className="text-xl font-bold text-slate-800">Estado de Documentos</h2>
-            <Link to="/generador" className="text-sm bg-blue-600 text-white font-bold px-4 py-2 rounded-xl hover:bg-blue-700 transition-colors"> + Nuevo Vehículo</Link>
+            {!readOnly && (
+              <Link to="/generador" className="text-sm bg-blue-600 text-white font-bold px-4 py-2 rounded-xl hover:bg-blue-700 transition-colors">
+                + Nuevo Vehículo
+              </Link>
+            )}
           </div>
           
           <div className="hidden md:block overflow-x-auto w-full">
@@ -322,12 +329,16 @@ export default function TabFlota({ busqueda, filtroTipoVehiculo }: TabFlotaProps
                   <th className="p-4 font-bold">Certificado Mantención</th>
                   <th className="p-4 font-bold">SOAP</th>
                   <th className="p-4 font-bold">Pauta Mantención</th>
-                  <th className="p-4 font-bold text-center">Acciones</th>
+                  {!readOnly && <th className="p-4 font-bold text-center">Acciones</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {vehiculosPaginados.length === 0 ? (
-                  <tr><td colSpan={7} className="p-8 text-center text-slate-400">No se encontraron vehículos.</td></tr>
+                  <tr>
+                    <td colSpan={readOnly ? 6 : 7} className="p-8 text-center text-slate-400">
+                      No se encontraron vehículos.
+                    </td>
+                  </tr>
                 ) : vehiculosPaginados.map((vehiculo) => {
                   const revInfo = calcularEstadoVencimiento(vehiculo.vencimientoRevision);
                   const circInfo = calcularEstadoVencimiento(vehiculo.vencimientoCirculacion);
@@ -432,10 +443,12 @@ export default function TabFlota({ busqueda, filtroTipoVehiculo }: TabFlotaProps
                         </div>
                       </td>
 
-                      <td className="p-4 flex gap-2 justify-center mt-2">
-                        <button onClick={() => editarVehiculoEnFormulario(vehiculo)} className="text-xs font-bold px-3 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors">Editar</button>
-                        <button onClick={() => eliminarVehiculo(vehiculo.id, vehiculo.patente)} className="text-xs font-bold px-3 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors">Eliminar</button>
-                      </td>
+                      {!readOnly && (
+                        <td className="p-4 flex gap-2 justify-center mt-2">
+                          <button onClick={() => editarVehiculoEnFormulario(vehiculo)} className="text-xs font-bold px-3 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors">Editar</button>
+                          <button onClick={() => eliminarVehiculo(vehiculo.id, vehiculo.patente)} className="text-xs font-bold px-3 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors">Eliminar</button>
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
@@ -535,10 +548,12 @@ export default function TabFlota({ busqueda, filtroTipoVehiculo }: TabFlotaProps
                     </div>
                   </div>
                   
-                  <div className="flex gap-3 mt-5 w-full">
-                    <button onClick={() => editarVehiculoEnFormulario(vehiculo)} className="flex-1 py-3 px-4 bg-blue-50 text-blue-600 border border-blue-100 rounded-xl text-xs font-black hover:bg-blue-100 transition-colors">Editar</button>
-                    <button onClick={() => eliminarVehiculo(vehiculo.id, vehiculo.patente)} className="flex-1 py-3 px-4 bg-red-50 text-red-600 border border-red-100 rounded-xl text-xs font-black hover:bg-red-100 transition-colors">Eliminar</button>
-                  </div>
+                  {!readOnly && (
+                    <div className="flex gap-3 mt-5 w-full">
+                      <button onClick={() => editarVehiculoEnFormulario(vehiculo)} className="flex-1 py-3 px-4 bg-blue-50 text-blue-600 border border-blue-100 rounded-xl text-xs font-black hover:bg-blue-100 transition-colors">Editar</button>
+                      <button onClick={() => eliminarVehiculo(vehiculo.id, vehiculo.patente)} className="flex-1 py-3 px-4 bg-red-50 text-red-600 border border-red-100 rounded-xl text-xs font-black hover:bg-red-100 transition-colors">Eliminar</button>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -552,7 +567,7 @@ export default function TabFlota({ busqueda, filtroTipoVehiculo }: TabFlotaProps
         </div>
       </div>
 
-      {vehiculoEditando && (
+      {vehiculoEditando && !readOnly && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
           <div className="bg-white rounded-3xl p-6 md:p-8 w-full max-w-3xl shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar border border-slate-100">
             <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-4">

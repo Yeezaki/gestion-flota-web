@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { collection, addDoc, serverTimestamp, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, doc, getDoc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { db, auth } from '../lib/firebase';
 
@@ -33,6 +33,7 @@ interface UsuarioPlataforma {
   id: string;
   email?: string;
   nombre?: string;
+  razonSocial?: string;
   rol?: string;
   activo?: boolean;
   ultimoAcceso?: any;
@@ -71,6 +72,27 @@ export default function DashboardAdmin() {
 
   const [modoTorre, setModoTorre] = useState<'historial' | 'cargar_gps'>('historial');
   const [modalFirmaPreview, setModalFirmaPreview] = useState<string | null>(null);
+
+  const [isReadOnly, setIsReadOnly] = useState<boolean>(false);
+
+  // Verificacion directa del rol del usuario logueado en Firestore
+  useEffect(() => {
+    const verificarRolActual = async () => {
+      const user = auth.currentUser;
+      if (user) {
+        try {
+          const docSnap = await getDoc(doc(db, 'usuarios', user.uid));
+          if (docSnap.exists()) {
+            const rol = (docSnap.data().rol || '').toLowerCase().trim();
+            setIsReadOnly(rol === 'admin_readonly' || rol.includes('readonly') || rol.includes('auditor'));
+          }
+        } catch (e) {
+          console.error('Error al verificar permisos del usuario:', e);
+        }
+      }
+    };
+    verificarRolActual();
+  }, []);
 
   useEffect(() => {
     const unsubReportes = onSnapshot(query(collection(db, 'reportes'), orderBy('fecha', 'desc')), (snap) => {
@@ -127,9 +149,9 @@ export default function DashboardAdmin() {
       const user = auth.currentUser;
       await addDoc(collection(db, 'historial_acciones'), {
         usuario: user?.email || 'Desconocido',
-        rol: 'admin',
+        rol: isReadOnly ? 'admin_readonly' : 'admin',
         accion: 'CIERRE_SESION',
-        detalles: 'El administrador cerro su sesion',
+        detalles: isReadOnly ? 'El administrador auditor cerro su sesion' : 'El administrador cerro su sesion',
         fecha: serverTimestamp()
       });
     } catch (e) {
@@ -140,6 +162,7 @@ export default function DashboardAdmin() {
   };
 
   const handleGuardarAlcohol = async (nuevoRegistro: RegistroAlcoholDrogas) => {
+    if (isReadOnly) return;
     const { id, ...datosSinId } = nuevoRegistro;
     await addDoc(collection(db, 'controles_alcohol_drogas'), {
       ...datosSinId,
@@ -149,6 +172,7 @@ export default function DashboardAdmin() {
   };
 
   const handleGuardarProcedimiento = async (nuevoRegistro: EvidenciaEvalProcedimiento) => {
+    if (isReadOnly) return;
     const { id, ...datosSinId } = nuevoRegistro;
     await addDoc(collection(db, 'evaluaciones_procedimiento'), {
       ...datosSinId,
@@ -158,6 +182,7 @@ export default function DashboardAdmin() {
   };
 
   const handleGuardarReporteGPS = async (reporte: ReporteVelocidadGPS) => {
+    if (isReadOnly) return;
     const { id, ...datosSinId } = reporte;
     await addDoc(collection(db, 'reportes_gps_velocidad'), {
       ...datosSinId,
@@ -183,6 +208,8 @@ export default function DashboardAdmin() {
       cumpleRol = true;
     } else if (filtroRolUsuarios === 'generador') {
       cumpleRol = rolTexto.includes('generador') || rolTexto.includes('qr');
+    } else if (filtroRolUsuarios === 'admin_readonly') {
+      cumpleRol = rolTexto.includes('readonly') || rolTexto.includes('auditor');
     } else {
       cumpleRol = rolTexto.includes(filtroRolUsuarios.toLowerCase());
     }
@@ -191,6 +218,7 @@ export default function DashboardAdmin() {
     const cumpleBusqueda =
       !queryStr ||
       (u.nombre && u.nombre.toLowerCase().includes(queryStr)) ||
+      (u.razonSocial && u.razonSocial.toLowerCase().includes(queryStr)) ||
       (u.email && u.email.toLowerCase().includes(queryStr));
 
     return cumpleRol && cumpleBusqueda;
@@ -199,12 +227,18 @@ export default function DashboardAdmin() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 antialiased overflow-x-hidden">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 space-y-6">
-        
+
+        {isReadOnly && (
+          <div className="bg-amber-600 text-white px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold text-center shadow-sm">
+            Modo Solo Lectura (Auditor): Tienes acceso para visualizar toda la informacion de la plataforma, pero las funciones de creacion, edicion y eliminacion estan deshabilitadas.
+          </div>
+        )}
+
         <header className="bg-white border border-slate-200/90 rounded-3xl p-4 sm:p-6 shadow-sm">
           <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
             <div>
               <span className="text-[10px] font-black uppercase tracking-wider text-blue-700 bg-blue-50 px-3 py-1 rounded-full border border-blue-200">
-                Consola Central Multi-Rol
+                {isReadOnly ? 'Consola de Auditoria (Solo Lectura)' : 'Consola Central Multi-Rol'}
               </span>
               <h1 className="text-xl sm:text-2xl lg:text-3xl font-black text-slate-900 tracking-tight mt-1.5">
                 Panel de Control Administrador
@@ -237,12 +271,14 @@ export default function DashboardAdmin() {
               </select>
 
               <div className="flex items-center gap-2 shrink-0">
-                <Link
-                  to="/generador"
-                  className="flex-1 sm:flex-none text-center bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white font-bold py-2.5 px-4 rounded-2xl transition-all shadow-sm text-xs sm:text-sm whitespace-nowrap"
-                >
-                  + Agregar Vehiculo
-                </Link>
+                {!isReadOnly && (
+                  <Link
+                    to="/generador"
+                    className="flex-1 sm:flex-none text-center bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white font-bold py-2.5 px-4 rounded-2xl transition-all shadow-sm text-xs sm:text-sm whitespace-nowrap"
+                  >
+                    + Agregar Vehiculo
+                  </Link>
+                )}
                 <button
                   type="button"
                   onClick={manejarCerrarSesion}
@@ -370,17 +406,22 @@ export default function DashboardAdmin() {
         </nav>
 
         <main className="space-y-6 w-full">
-          {pestanaActiva === 'reportes' && <TabReportes busqueda={busqueda} filtroTipoVehiculo={filtroTipoVehiculo} />}
-          {pestanaActiva === 'vehiculos' && <TabFlota busqueda={busqueda} filtroTipoVehiculo={filtroTipoVehiculo} />}
-          {pestanaActiva === 'qrs' && <TabQRs busqueda={busqueda} filtroTipoVehiculo={filtroTipoVehiculo} />}
+          {pestanaActiva === 'reportes' && (
+            <TabReportes busqueda={busqueda} filtroTipoVehiculo={filtroTipoVehiculo} />
+          )}
+          {pestanaActiva === 'vehiculos' && (
+            <TabFlota busqueda={busqueda} filtroTipoVehiculo={filtroTipoVehiculo} readOnly={isReadOnly} />
+          )}
+          {pestanaActiva === 'qrs' && (
+            <TabQRs busqueda={busqueda} filtroTipoVehiculo={filtroTipoVehiculo} />
+          )}
           {pestanaActiva === 'agenda' && <TabAgenda />}
           {pestanaActiva === 'estadisticas' && <TabEstadisticas />}
-          {pestanaActiva === 'usuarios' && <TabUsuarios />}
+          {pestanaActiva === 'usuarios' && <TabUsuarios readOnly={isReadOnly} />}
           {pestanaActiva === 'auditoria' && <TabAuditoria />}
 
           {pestanaActiva === 'vistas_roles' && (
             <div className="space-y-6">
-              
               <div className="bg-white p-4 sm:p-6 rounded-3xl border border-slate-200/90 shadow-sm space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
                   <div>
@@ -459,7 +500,7 @@ export default function DashboardAdmin() {
                           Directorio de Usuarios de las Vistas y Modulos
                         </h3>
                         <p className="text-xs text-slate-500">
-                          Visualiza los usuarios registrados en cada area operativa (Taller, Prevencion, Torre y Generador QR).
+                          Visualiza los usuarios registrados en cada area operativa (Taller, Prevencion, Torre, Generador QR y Auditor).
                         </p>
                       </div>
 
@@ -481,6 +522,7 @@ export default function DashboardAdmin() {
                           <option value="prevencion">Prevencion de Riesgos</option>
                           <option value="torre">Torre de Control</option>
                           <option value="generador">Generador QR</option>
+                          <option value="admin_readonly">Admin Solo Lectura</option>
                         </select>
                       </div>
                     </div>
@@ -508,11 +550,15 @@ export default function DashboardAdmin() {
                               const rolTexto = (u.rol || 'Sin Rol').toLowerCase();
                               return (
                                 <tr key={u.id} className="hover:bg-slate-50">
-                                  <td className="p-3 font-bold text-slate-800">{u.nombre || 'Usuario sin nombre'}</td>
+                                  <td className="p-3 font-bold text-slate-800">{u.razonSocial || u.nombre || 'Usuario sin nombre'}</td>
                                   <td className="p-3 font-mono text-slate-600">{u.email || 'N/A'}</td>
                                   <td className="p-3">
-                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-slate-100 text-slate-700 border border-slate-200">
-                                      {u.rol || 'Sin Rol'}
+                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${
+                                      rolTexto.includes('readonly')
+                                        ? 'bg-amber-50 text-amber-800 border-amber-200'
+                                        : 'bg-slate-100 text-slate-700 border-slate-200'
+                                    }`}>
+                                      {u.rol === 'admin_readonly' ? 'Admin Solo Lectura' : (u.rol || 'Sin Rol')}
                                     </span>
                                   </td>
                                   <td className="p-3">
@@ -562,13 +608,15 @@ export default function DashboardAdmin() {
                           Revision de velocidades, excesos de velocidad y carga de telemetria GPS.
                         </p>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setModoTorre(modoTorre === 'historial' ? 'cargar_gps' : 'historial')}
-                        className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-sm transition-all"
-                      >
-                        {modoTorre === 'historial' ? '+ Cargar Archivo GPS' : 'Ver Historial GPS'}
-                      </button>
+                      {!isReadOnly && (
+                        <button
+                          type="button"
+                          onClick={() => setModoTorre(modoTorre === 'historial' ? 'cargar_gps' : 'historial')}
+                          className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-sm transition-all"
+                        >
+                          {modoTorre === 'historial' ? '+ Cargar Archivo GPS' : 'Ver Historial GPS'}
+                        </button>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
@@ -589,7 +637,7 @@ export default function DashboardAdmin() {
                     </div>
                   </div>
 
-                  {modoTorre === 'cargar_gps' ? (
+                  {modoTorre === 'cargar_gps' && !isReadOnly ? (
                     <div className="bg-white rounded-3xl border border-slate-200 p-4 sm:p-6 shadow-sm">
                       <ModuloTorreControl
                         usuarioUid={auth.currentUser?.uid || 'admin-uid'}
@@ -657,22 +705,24 @@ export default function DashboardAdmin() {
                           Planilla de drogas (30d + Excel), reposos PVT, alcotest, narcotest y firmas.
                         </p>
                       </div>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setSubPestanaPrevencion('nuevo_alcohol')}
-                          className="px-3.5 py-1.5 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-xl"
-                        >
-                          + Control Alcohol/Drogas
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setSubPestanaPrevencion('nuevo_procedimiento')}
-                          className="px-3.5 py-1.5 text-xs font-bold text-white bg-slate-800 hover:bg-slate-900 rounded-xl"
-                        >
-                          + Evidencia Procedimiento
-                        </button>
-                      </div>
+                      {!isReadOnly && (
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setSubPestanaPrevencion('nuevo_alcohol')}
+                            className="px-3.5 py-1.5 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-xl"
+                          >
+                            + Control Alcohol/Drogas
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSubPestanaPrevencion('nuevo_procedimiento')}
+                            className="px-3.5 py-1.5 text-xs font-bold text-white bg-slate-800 hover:bg-slate-900 rounded-xl"
+                          >
+                            + Evidencia Procedimiento
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-2 overflow-x-auto pb-1 scroll-touch">
@@ -738,10 +788,10 @@ export default function DashboardAdmin() {
                   )}
 
                   {subPestanaPrevencion === 'bloqueos_pvt' && (
-                    <TablaBloqueosPVT permitirLiberar={true} />
+                    <TablaBloqueosPVT permitirLiberar={!isReadOnly} />
                   )}
 
-                  {subPestanaPrevencion === 'nuevo_alcohol' && (
+                  {subPestanaPrevencion === 'nuevo_alcohol' && !isReadOnly && (
                     <div className="bg-white rounded-3xl border border-slate-200 p-4 sm:p-6 shadow-sm">
                       <FormAlcoholDrogas
                         evaluadorUid={auth.currentUser?.uid || 'admin-uid'}
@@ -751,7 +801,7 @@ export default function DashboardAdmin() {
                     </div>
                   )}
 
-                  {subPestanaPrevencion === 'nuevo_procedimiento' && (
+                  {subPestanaPrevencion === 'nuevo_procedimiento' && !isReadOnly && (
                     <div className="bg-white rounded-3xl border border-slate-200 p-4 sm:p-6 shadow-sm">
                       <FormEvidenciaProcedimiento
                         evaluadorUid={auth.currentUser?.uid || 'admin-uid'}
@@ -935,14 +985,14 @@ export default function DashboardAdmin() {
                 <div className="bg-white rounded-3xl border border-slate-200 p-2 sm:p-4 shadow-sm">
                   <div className="p-3 border-b border-slate-100 mb-4 flex justify-between items-center">
                     <span className="text-xs font-black uppercase text-blue-700 bg-blue-50 px-3 py-1 rounded-full border border-blue-200">
-                      Entorno de Trabajo de Taller y OTs
+                      Entorno de Trabajo de Taller y OTs {isReadOnly && '(Modo Consulta)'}
                     </span>
                     <button
                       type="button"
                       onClick={() => setVistaRolSeleccionada('resumen')}
                       className="text-xs font-bold text-slate-500 hover:text-slate-800"
                     >
-                      Cerrar Vista ×
+                      Cerrar Vista x
                     </button>
                   </div>
                   <DashboardTaller />
@@ -953,14 +1003,14 @@ export default function DashboardAdmin() {
                 <div className="bg-white rounded-3xl border border-slate-200 p-2 sm:p-4 shadow-sm">
                   <div className="p-3 border-b border-slate-100 mb-4 flex justify-between items-center">
                     <span className="text-xs font-black uppercase text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
-                      Entorno de Creacion de Vehiculos y Codigos QR
+                      Entorno de Creacion de Vehiculos y Codigos QR {isReadOnly && '(Modo Consulta)'}
                     </span>
                     <button
                       type="button"
                       onClick={() => setVistaRolSeleccionada('resumen')}
                       className="text-xs font-bold text-slate-500 hover:text-slate-800"
                     >
-                      Cerrar Vista ×
+                      Cerrar Vista x
                     </button>
                   </div>
                   <GeneradorQR />
@@ -981,7 +1031,7 @@ export default function DashboardAdmin() {
                   onClick={() => setModalFirmaPreview(null)}
                   className="text-slate-400 hover:text-slate-700 text-sm font-bold"
                 >
-                  ✕
+                  x
                 </button>
               </div>
               <div className="border border-slate-200 rounded-2xl bg-slate-50 p-2 flex items-center justify-center">
@@ -999,6 +1049,6 @@ export default function DashboardAdmin() {
         )}
 
       </div>
-    </div>  
+    </div>
   );
 }
