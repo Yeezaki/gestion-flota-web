@@ -141,7 +141,6 @@ export default function TabUsuarios() {
   return (
     <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
       
-      {/* Columna Izquierda: Formulario Crear / Editar */}
       <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-sm xl:col-span-4 h-fit">
         <div className="mb-4 border-b border-slate-100 pb-3">
           <h2 className="text-base sm:text-lg font-black text-slate-800">
@@ -245,7 +244,6 @@ export default function TabUsuarios() {
         </form>
       </div>
 
-      {/* Columna Derecha: Cuentas Registradas */}
       <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-sm xl:col-span-8 space-y-4">
         <div className="flex justify-between items-center border-b border-slate-100 pb-3">
           <h2 className="text-base sm:text-lg font-black text-slate-800">

@@ -41,12 +41,10 @@ interface UsuarioPlataforma {
 export default function DashboardAdmin() {
   const navigate = useNavigate();
 
-  // Pestanas de gestion general del Admin
   const [pestanaActiva, setPestanaActiva] = useState<
     'reportes' | 'vehiculos' | 'qrs' | 'agenda' | 'estadisticas' | 'usuarios' | 'auditoria' | 'vistas_roles'
   >('reportes');
 
-  // Selector de lista desplegable para las vistas por rol
   const [vistaRolSeleccionada, setVistaRolSeleccionada] = useState<
     'resumen' | 'prevencion' | 'torre' | 'taller' | 'generador'
   >('resumen');
@@ -54,7 +52,6 @@ export default function DashboardAdmin() {
   const [busqueda, setBusqueda] = useState('');
   const [filtroTipoVehiculo, setFiltroTipoVehiculo] = useState('todos');
 
-  // Datos en tiempo real
   const [reportesDiarios, setReportesDiarios] = useState<any[]>([]);
   const [vehiculos, setVehiculos] = useState<any[]>([]);
   const [citasTaller, setCitasTaller] = useState<any[]>([]);
@@ -65,11 +62,9 @@ export default function DashboardAdmin() {
   const [reportesGPS, setReportesGPS] = useState<ReporteVelocidadGPS[]>([]);
   const [usuariosSistema, setUsuariosSistema] = useState<UsuarioPlataforma[]>([]);
 
-  // Filtro de usuarios en el visor general
   const [filtroRolUsuarios, setFiltroRolUsuarios] = useState<string>('todos');
   const [busquedaUsuario, setBusquedaUsuario] = useState<string>('');
 
-  // Sub-estados internos para Prevencion y Torre
   const [subPestanaPrevencion, setSubPestanaPrevencion] = useState<
     'planilla' | 'bloqueos_pvt' | 'documentos' | 'alcohol' | 'procedimientos' | 'emergencias' | 'nuevo_alcohol' | 'nuevo_procedimiento'
   >('planilla');
@@ -171,7 +166,6 @@ export default function DashboardAdmin() {
     setModoTorre('historial');
   };
 
-  // Metricas calculadas
   const totalExcesosGPS = reportesGPS.reduce((acc, r) => acc + (r.excesosVelocidadDetectados || 0), 0);
   const totalKmGPS = Math.round(reportesGPS.reduce((acc, r) => acc + (r.kilometrajeTotalKm || 0), 0));
   const velPromedioGPS = reportesGPS.length > 0
@@ -181,7 +175,6 @@ export default function DashboardAdmin() {
   const totalBloqueados = reportesDiarios.filter((r) => r.bloqueado).length;
   const citasPendientes = citasTaller.filter((c) => c.estado === 'pendiente').length;
 
-  // Filtrado de usuarios por rol y busqueda
   const usuariosFiltrados = usuariosSistema.filter((u) => {
     const rolTexto = (u.rol || '').toLowerCase();
     let cumpleRol = false;
@@ -207,7 +200,6 @@ export default function DashboardAdmin() {
     <div className="min-h-screen bg-slate-50 text-slate-800 antialiased overflow-x-hidden">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 space-y-6">
         
-        {/* Encabezado General Responsivo */}
         <header className="bg-white border border-slate-200/90 rounded-3xl p-4 sm:p-6 shadow-sm">
           <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
             <div>
@@ -222,7 +214,6 @@ export default function DashboardAdmin() {
               </p>
             </div>
 
-            {/* Buscador, Filtro y Acciones organizados sin desborde */}
             <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5 w-full xl:w-auto">
               <div className="flex-1 sm:min-w-[200px]">
                 <input
@@ -264,7 +255,6 @@ export default function DashboardAdmin() {
           </div>
         </header>
 
-        {/* Tarjetas KPI de Resumen General */}
         <section className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-sm">
             <span className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">Flota Total</span>
@@ -295,7 +285,6 @@ export default function DashboardAdmin() {
           </div>
         </section>
 
-        {/* Barra de Pestanas con Desplazamiento Tactil Fluido */}
         <nav aria-label="Navegacion principal" className="bg-white p-2 rounded-2xl border border-slate-200/90 shadow-sm">
           <div className="flex items-center gap-2 overflow-x-auto pb-1 scroll-touch">
             <button
@@ -344,7 +333,6 @@ export default function DashboardAdmin() {
               Estadisticas
             </button>
 
-            {/* Conmutador de Vistas por Rol */}
             <button
               type="button"
               onClick={() => setPestanaActiva('vistas_roles')}
@@ -381,7 +369,6 @@ export default function DashboardAdmin() {
           </div>
         </nav>
 
-        {/* Contenido Principal */}
         <main className="space-y-6 w-full">
           {pestanaActiva === 'reportes' && <TabReportes busqueda={busqueda} filtroTipoVehiculo={filtroTipoVehiculo} />}
           {pestanaActiva === 'vehiculos' && <TabFlota busqueda={busqueda} filtroTipoVehiculo={filtroTipoVehiculo} />}
@@ -391,7 +378,6 @@ export default function DashboardAdmin() {
           {pestanaActiva === 'usuarios' && <TabUsuarios />}
           {pestanaActiva === 'auditoria' && <TabAuditoria />}
 
-          {/* VISOR DE VISTAS POR ROL CON LISTA DESPLEGABLE */}
           {pestanaActiva === 'vistas_roles' && (
             <div className="space-y-6">
               
@@ -406,7 +392,6 @@ export default function DashboardAdmin() {
                     </p>
                   </div>
                   
-                  {/* Selector de lista desplegable para las vistas */}
                   <div className="flex items-center gap-2">
                     <label htmlFor="select-vista-rol" className="text-xs font-bold text-slate-600 uppercase tracking-wider shrink-0">
                       Vista activa:
@@ -427,10 +412,8 @@ export default function DashboardAdmin() {
                 </div>
               </div>
 
-              {/* VISTA 1: MATRIZ RESUMEN Y DIRECTORIO CENTRALIZADO DE USUARIOS */}
               {vistaRolSeleccionada === 'resumen' && (
                 <div className="space-y-6">
-                  {/* Tarjetas resumen de metricas operativas */}
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-2">
                       <div className="flex justify-between items-center">
@@ -469,7 +452,6 @@ export default function DashboardAdmin() {
                     </div>
                   </div>
 
-                  {/* Panel Centralizado de Usuarios de Roles y Vistas */}
                   <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-4">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-100 pb-3">
                       <div>
@@ -568,7 +550,6 @@ export default function DashboardAdmin() {
                 </div>
               )}
 
-              {/* VISTA 2: TORRE DE CONTROL */}
               {vistaRolSeleccionada === 'torre' && (
                 <div className="space-y-6">
                   <div className="bg-white p-4 sm:p-6 rounded-3xl border border-slate-200 shadow-sm">
@@ -664,7 +645,6 @@ export default function DashboardAdmin() {
                 </div>
               )}
 
-              {/* VISTA 3: PREVENCION DE RIESGOS */}
               {vistaRolSeleccionada === 'prevencion' && (
                 <div className="space-y-6">
                   <div className="bg-white p-4 sm:p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
@@ -951,7 +931,6 @@ export default function DashboardAdmin() {
                 </div>
               )}
 
-              {/* VISTA 4: TALLER MECANICO */}
               {vistaRolSeleccionada === 'taller' && (
                 <div className="bg-white rounded-3xl border border-slate-200 p-2 sm:p-4 shadow-sm">
                   <div className="p-3 border-b border-slate-100 mb-4 flex justify-between items-center">
@@ -970,7 +949,6 @@ export default function DashboardAdmin() {
                 </div>
               )}
 
-              {/* VISTA 5: GENERADOR QR */}
               {vistaRolSeleccionada === 'generador' && (
                 <div className="bg-white rounded-3xl border border-slate-200 p-2 sm:p-4 shadow-sm">
                   <div className="p-3 border-b border-slate-100 mb-4 flex justify-between items-center">
@@ -993,7 +971,6 @@ export default function DashboardAdmin() {
           )}
         </main>
 
-        {/* Modal de Firma */}
         {modalFirmaPreview && (
           <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
             <div className="bg-white rounded-3xl max-w-sm w-full p-5 shadow-2xl space-y-4">

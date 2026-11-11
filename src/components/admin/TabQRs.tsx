@@ -150,7 +150,6 @@ export default function TabQRs({ busqueda, filtroTipoVehiculo }: TabQRsProps) {
 
   return (
     <div className="space-y-6 w-full max-w-full">
-      {/* Botones de acción superiores alineados y responsivos */}
       <div className="flex flex-wrap items-center justify-end gap-2.5">
         <button
           onClick={depurarQRsHuerfanos}

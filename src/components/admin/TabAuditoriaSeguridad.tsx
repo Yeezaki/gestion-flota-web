@@ -34,7 +34,6 @@ export const TabAuditoriaSeguridad: React.FC<TabAuditoriaSeguridadProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Navegación interna de Auditoría */}
       <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-3">
         <button
           type="button"
@@ -93,7 +92,6 @@ export const TabAuditoriaSeguridad: React.FC<TabAuditoriaSeguridadProps> = ({
         </button>
       </div>
 
-      {/* 1. SECCIÓN: DOCUMENTOS FIRMADOS */}
       {subTab === 'documentos' && (
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
           <div className="p-4 border-b border-slate-200 bg-slate-50">
@@ -158,7 +156,6 @@ export const TabAuditoriaSeguridad: React.FC<TabAuditoriaSeguridadProps> = ({
         </div>
       )}
 
-      {/* 2. SECCIÓN: ALCOHOL Y DROGAS */}
       {subTab === 'alcohol' && (
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
           <div className="p-4 border-b border-slate-200 bg-slate-50">
@@ -236,7 +233,6 @@ export const TabAuditoriaSeguridad: React.FC<TabAuditoriaSeguridadProps> = ({
         </div>
       )}
 
-      {/* 3. SECCIÓN: EVALUACIONES DE PROCEDIMIENTO */}
       {subTab === 'procedimientos' && (
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
           <div className="p-4 border-b border-slate-200 bg-slate-50">
@@ -308,7 +304,6 @@ export const TabAuditoriaSeguridad: React.FC<TabAuditoriaSeguridadProps> = ({
         </div>
       )}
 
-      {/* 4. SECCIÓN: EVALUACIONES DE EMERGENCIA (CHECKLIST) */}
       {subTab === 'emergencias' && (
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
           <div className="p-4 border-b border-slate-200 bg-slate-50">
@@ -373,7 +368,6 @@ export const TabAuditoriaSeguridad: React.FC<TabAuditoriaSeguridadProps> = ({
         </div>
       )}
 
-      {/* 5. SECCIÓN: TORRE DE CONTROL Y SEGUIMIENTO GPS */}
       {subTab === 'gps' && (
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
           <div className="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
@@ -453,7 +447,6 @@ export const TabAuditoriaSeguridad: React.FC<TabAuditoriaSeguridadProps> = ({
         </div>
       )}
 
-      {/* Modal Previsualización de Firma */}
       {modalFirmaPreview && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
           <div className="bg-white rounded-xl p-5 max-w-md w-full shadow-2xl space-y-4 border border-slate-200">
@@ -480,7 +473,6 @@ export const TabAuditoriaSeguridad: React.FC<TabAuditoriaSeguridadProps> = ({
         </div>
       )}
 
-      {/* Modal Previsualización de Adjuntos (Fotos o PDFs) */}
       {modalAdjuntoPreview && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
           <div className="bg-white rounded-xl p-5 max-w-2xl w-full shadow-2xl space-y-4 border border-slate-200">
@@ -515,7 +507,6 @@ export const TabAuditoriaSeguridad: React.FC<TabAuditoriaSeguridadProps> = ({
         </div>
       )}
 
-      {/* Modal Detalle de Puntos GPS del Reporte */}
       {reporteSeleccionado && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
           <div className="bg-white rounded-xl p-5 max-w-2xl w-full shadow-2xl space-y-4 border border-slate-200 max-h-[85vh] flex flex-col">

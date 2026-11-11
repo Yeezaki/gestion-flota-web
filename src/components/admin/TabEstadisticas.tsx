@@ -8,7 +8,6 @@ export default function TabEstadisticas() {
   const [vehiculoEstadistica, setVehiculoEstadistica] = useState<string>('');
   const [cargando, setCargando] = useState(true);
 
-  // Cargar los reportes necesarios para armar la estadística localmente
   useEffect(() => {
     const cargarDatos = async () => {
       try {

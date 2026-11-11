@@ -14,7 +14,6 @@ export const PlanillaControlesDrogas: React.FC<PlanillaProps> = ({ controles }) 
   const GRACIA_DESCARGA_DIAS = 7;
   const LIMITE_TOTAL_DIAS = RETENCION_VISTA_DIAS + GRACIA_DESCARGA_DIAS; // 37 dias
 
-  // Filtro de retención
   const controlesVigentes = controles.filter((c) => {
     const fechaBase = c.fechaTimestamp || new Date(c.fechaControl).getTime() || ahora;
     const diasTranscurridos = (ahora - fechaBase) / MILIS_DIA;

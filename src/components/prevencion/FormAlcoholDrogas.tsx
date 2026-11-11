@@ -214,7 +214,6 @@ export const FormAlcoholDrogas: React.FC<FormAlcoholDrogasProps> = ({
           </div>
         </div>
 
-        {/* Captura de Credencial y Foto de la Prueba Realizada */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
           <div className="border-2 border-dashed border-slate-200 rounded-2xl p-4 text-center bg-slate-50/50">
             <label className="block text-xs font-bold text-slate-700 mb-2">
@@ -308,7 +307,6 @@ export const FormAlcoholDrogas: React.FC<FormAlcoholDrogasProps> = ({
           />
         </div>
 
-        {/* Evidencias adicionales */}
         <div className="space-y-2">
           <label className="block text-xs font-semibold text-slate-700">
             Adjuntos adicionales (PDF, informes clínicos)

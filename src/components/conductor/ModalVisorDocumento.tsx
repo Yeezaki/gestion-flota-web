@@ -142,7 +142,6 @@ export const ModalVisorDocumento: React.FC<ModalVisorDocumentoProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-3 sm:p-6 backdrop-blur-sm antialiased">
       <div className="relative flex flex-col max-h-[92vh] w-full max-w-3xl rounded-2xl bg-white shadow-2xl overflow-hidden border border-slate-200">
         
-        {/* Cabecera */}
         <div className="flex items-center justify-between border-b border-slate-200 px-5 sm:px-6 py-4 bg-slate-50">
           <div>
             <h3 className="text-base sm:text-lg font-bold text-slate-800">{docConfig.titulo}</h3>
@@ -162,10 +161,8 @@ export const ModalVisorDocumento: React.FC<ModalVisorDocumentoProps> = ({
           </button>
         </div>
 
-        {/* Cuerpo del Documento */}
         <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5 space-y-5 scroll-touch">
           
-          {/* Selector de Páginas */}
           <div className="flex items-center justify-between bg-slate-100 rounded-xl p-2 border border-slate-200">
             <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">
               Hoja {paginaActual + 1} de {docConfig.paginas.length}
@@ -211,7 +208,6 @@ export const ModalVisorDocumento: React.FC<ModalVisorDocumentoProps> = ({
             </label>
           </div>
 
-          {/* Canvas de Firma */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">
@@ -253,7 +249,6 @@ export const ModalVisorDocumento: React.FC<ModalVisorDocumentoProps> = ({
           )}
         </div>
 
-        {/* Acciones */}
         <div className="flex items-center justify-end gap-3 border-t border-slate-200 px-5 sm:px-6 py-4 bg-slate-50">
           <button
             type="button"

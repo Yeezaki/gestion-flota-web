@@ -260,7 +260,6 @@ export default function TabReportes({ busqueda, filtroTipoVehiculo }: TabReporte
         </div>
       </div>
 
-      {/* VENTANA MODAL PARA DETALLES DEL REPORTE */}
       {reporteSeleccionado && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
           <div className="bg-white rounded-3xl p-8 w-full max-w-xl shadow-2xl animate-fade-in max-h-[90vh] overflow-y-auto">
@@ -280,7 +279,6 @@ export default function TabReportes({ busqueda, filtroTipoVehiculo }: TabReporte
                 <p className="text-sm text-slate-500">Conductor: <span className="font-bold text-slate-800">{reporteSeleccionado.conductorNombre || 'No registrado'}</span></p>
                 <p className="text-sm text-slate-500">RUT: <span className="font-bold text-slate-800">{reporteSeleccionado.conductorRut || 'No registrado'}</span></p>
                 
-                {/* Enlace de Ubicación GPS */}
                 {reporteSeleccionado.ubicacion?.enlaceMapa && (
                   <div className="pt-2 border-t border-slate-200">
                     <a
@@ -299,7 +297,6 @@ export default function TabReportes({ busqueda, filtroTipoVehiculo }: TabReporte
                 )}
               </div>
 
-              {/* Bloque de Test Psicomotor */}
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
                 <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 mb-3">Evaluación Psicomotora (PVT)</h4>
                 <div className="grid grid-cols-2 gap-3 text-center mb-3">
@@ -336,7 +333,6 @@ export default function TabReportes({ busqueda, filtroTipoVehiculo }: TabReporte
                 )}
               </div>
               
-              {/* Bloque de Checklist */}
               <div>
                 <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 mb-2">Respuestas del Checklist</h4>
                 {reporteSeleccionado.bloqueoPorTestCognitivo ? (
@@ -359,7 +355,6 @@ export default function TabReportes({ busqueda, filtroTipoVehiculo }: TabReporte
                 )}
               </div>
 
-              {/* Fotos y Firma */}
               <div className="grid grid-cols-2 gap-4 mb-6 border-t border-slate-100 pt-4">
                 {reporteSeleccionado.fotoUrl && (
                   <div>

@@ -158,7 +158,6 @@ export const ChecklistEmergenciaConductor: React.FC<ChecklistEmergenciaConductor
 
   return (
     <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
-      {/* Cabecera Fija */}
       <div className="p-4 sm:p-5 border-b border-slate-200 bg-slate-50/80 flex justify-between items-center shrink-0">
         <div>
           <h3 className="text-sm sm:text-base font-black text-slate-800">
@@ -179,9 +178,7 @@ export const ChecklistEmergenciaConductor: React.FC<ChecklistEmergenciaConductor
         )}
       </div>
 
-      {/* Cuerpo Scrolleable Libremente */}
       <div className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-6">
-        {/* Preguntas */}
         <div className="space-y-4">
           {preguntasSeleccionadas.map((item, index) => (
             <div key={item.id} className="p-4 rounded-2xl bg-slate-50/90 border border-slate-200/80 space-y-3">
@@ -216,7 +213,6 @@ export const ChecklistEmergenciaConductor: React.FC<ChecklistEmergenciaConductor
           ))}
         </div>
 
-        {/* Recuadro de Firma */}
         <div className="space-y-2 border-t border-slate-200 pt-4">
           <div className="flex items-center justify-between">
             <label className="text-xs font-black text-slate-700 uppercase tracking-wide">
@@ -270,7 +266,6 @@ export const ChecklistEmergenciaConductor: React.FC<ChecklistEmergenciaConductor
         )}
       </div>
 
-      {/* Pie Fijo con Botón de Envío */}
       <div className="p-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-3 shrink-0">
         {onCerrar && (
           <button

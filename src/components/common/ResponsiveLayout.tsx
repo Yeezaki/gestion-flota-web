@@ -19,7 +19,6 @@ export const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
     <div className="min-h-screen bg-slate-50 text-slate-800 antialiased">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 space-y-6">
         
-        {/* Cabecera adaptable a PC, tablet y celular */}
         <header className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-6 shadow-sm">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
@@ -46,7 +45,6 @@ export const ResponsiveLayout: React.FC<ResponsiveLayoutProps> = ({
           </div>
         </header>
 
-        {/* Contenedor principal de vistas */}
         <main className="space-y-6">
           {children}
         </main>

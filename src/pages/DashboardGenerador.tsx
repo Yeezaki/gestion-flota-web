@@ -183,7 +183,6 @@ export default function DashboardGenerador() {
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-8 z-10 relative overflow-hidden">
       
-      {/* Elemento Oculto para Generar PDF */}
       <div style={{ position: 'absolute', top: 0, left: 0, opacity: 0, pointerEvents: 'none', zIndex: -50 }}>
         <div id="tarjeta-pdf-generador" className="bg-white p-8 flex flex-col items-center justify-center" style={{ width: '400px', height: '600px' }}>
           <img src={LOGO_BASE64} alt="Logo Empresa" style={{ height: '90px', objectFit: 'contain', marginBottom: '30px' }} />
@@ -218,7 +217,6 @@ export default function DashboardGenerador() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
-          {/* Columna Izquierda: Generar QR */}
           <div className="lg:col-span-1">
             <div className="bg-white p-8 rounded-3xl shadow-lg border border-slate-100 h-fit">
               <h2 className="text-xl font-black text-slate-800 mb-6">Nuevo Código QR</h2>
@@ -254,7 +252,6 @@ export default function DashboardGenerador() {
             </div>
           </div>
 
-          {/* Columna Derecha: Códigos y Flota Exclusiva */}
           <div className="lg:col-span-2 space-y-6">
             <div className="bg-white rounded-3xl shadow-lg overflow-hidden border border-slate-100">
               <div className="p-6 bg-slate-50 border-b border-slate-100">

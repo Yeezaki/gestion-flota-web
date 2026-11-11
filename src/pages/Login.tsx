@@ -72,12 +72,10 @@ export default function Login() {
       className="min-h-screen bg-cover bg-center bg-fixed bg-no-repeat flex items-center justify-center p-4 sm:p-6 relative"
       style={{ backgroundImage: "url('/fondo-conductor.jpg')" }}
     >
-      {/* Capa de oscurecimiento y desenfoque de fondo */}
       <div className="absolute inset-0 bg-slate-950/65 backdrop-blur-md"></div>
 
       <div className="relative z-10 w-full max-w-md bg-white/95 backdrop-blur-xl rounded-3xl p-6 sm:p-10 shadow-2xl border border-white/60">
         
-        {/* Cabecera institucional */}
         <div className="text-center mb-8">
           <div className="inline-flex p-3 bg-white rounded-2xl shadow-sm border border-slate-100 mb-4">
             <img
@@ -97,7 +95,6 @@ export default function Login() {
           </p>
         </div>
 
-        {/* Mensaje de error estilizado */}
         {error && (
           <div className="flex items-center gap-2.5 bg-rose-50 border border-rose-200 text-rose-700 p-3.5 rounded-2xl text-xs font-bold mb-6 animate-fade-in">
             <svg className="w-5 h-5 shrink-0 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -107,7 +104,6 @@ export default function Login() {
           </div>
         )}
 
-        {/* Formulario */}
         <form onSubmit={manejarLogin} className="space-y-5">
           <div>
             <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
@@ -187,7 +183,6 @@ export default function Login() {
           </button>
         </form>
 
-        {/* Pie de seguridad */}
         <div className="mt-8 pt-4 border-t border-slate-100 text-center">
           <p className="text-[11px] text-slate-400 font-medium">
             Acceso auditado y registrado bajo protocolo de seguridad institucional.

@@ -15,7 +15,6 @@ export default function TabAuditoria() {
   const [registros, setRegistros] = useState<RegistroAuditoria[]>([]);
   const [cargando, setCargando] = useState<boolean>(true);
 
-  // Filtros de Auditoría
   const [filtroRol, setFiltroRol] = useState<string>('todos');
   const [busquedaTexto, setBusquedaTexto] = useState<string>('');
 
@@ -23,7 +22,6 @@ export default function TabAuditoria() {
   const [limiteVisible, setLimiteVisible] = useState<number>(20);
 
   useEffect(() => {
-    // Escucha en tiempo real los últimos registros
     const q = query(
       collection(db, 'historial_acciones'),
       orderBy('fecha', 'desc'),
@@ -76,7 +74,6 @@ export default function TabAuditoria() {
     return cumpleRol && cumpleTexto;
   });
 
-  // Rebanada actual según el límite visible (20, 40, 60...)
   const registrosVisibles = registrosFiltrados.slice(0, limiteVisible);
   const quedanMasRegistros = registrosFiltrados.length > limiteVisible;
 
@@ -116,7 +113,6 @@ export default function TabAuditoria() {
           </p>
         </div>
 
-        {/* Controles de filtrado y búsqueda */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
           <input
             type="text"
@@ -212,7 +208,6 @@ export default function TabAuditoria() {
         </table>
       </div>
 
-      {/* Botón Mostrar Más y contador de visualización */}
       {!cargando && registrosFiltrados.length > 0 && (
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
           <span className="text-xs text-slate-500 font-medium">

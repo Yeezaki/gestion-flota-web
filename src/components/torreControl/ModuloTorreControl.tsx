@@ -286,7 +286,6 @@ export const ModuloTorreControl: React.FC<ModuloTorreControlProps> = ({
           </div>
         </div>
 
-        {/* Carga de Archivo GPS */}
         <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 space-y-2">
           <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">
             Cargar Archivo Telemático GPS (.json, .geojson, .csv)
@@ -302,7 +301,6 @@ export const ModuloTorreControl: React.FC<ModuloTorreControlProps> = ({
           </p>
         </div>
 
-        {/* Tarjetas de Metricas Telematicas */}
         {metricas && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2">
             <div className="p-3 bg-slate-100 rounded-lg border border-slate-200 text-center">
@@ -335,7 +333,6 @@ export const ModuloTorreControl: React.FC<ModuloTorreControlProps> = ({
           </div>
         )}
 
-        {/* Tabla resumen de los ultimos registros del recorrido */}
         {puntos.length > 0 && (
           <div className="space-y-2">
             <div className="flex justify-between items-center text-xs font-semibold text-slate-700">

@@ -79,7 +79,6 @@ export default function TabAgenda() {
           <p className="text-sm text-slate-500 mt-1">Administra las horas reservadas y revisa las Órdenes de Trabajo.</p>
         </div>
         
-        {/* VISTA PC */}
         <div className="hidden md:block overflow-x-auto w-full">
           <table className="w-full text-left border-collapse min-w-[900px]">
             <thead>
@@ -146,7 +145,6 @@ export default function TabAgenda() {
           </table>
         </div>
 
-        {/* VISTA MOVIL */}
         <div className="flex flex-col md:hidden gap-4 p-4">
           {citas.length === 0 ? (
             <div className="p-8 text-center text-slate-400 bg-white rounded-2xl border border-slate-100">No hay citas agendadas.</div>
@@ -210,7 +208,6 @@ export default function TabAgenda() {
         </div>
       </div>
 
-      {/* MODAL ORDEN DE TRABAJO */}
       {otSeleccionada && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
           <div className="bg-white rounded-3xl p-8 w-full max-w-2xl shadow-2xl animate-fade-in max-h-[90vh] overflow-y-auto custom-scrollbar">

@@ -71,7 +71,6 @@ export default function DashboardTaller() {
     const user = auth.currentUser;
     if (!user) return;
 
-    // Cargar perfil del taller
     getDoc(doc(db, 'usuarios', user.uid)).then((userDoc) => {
       if (userDoc.exists()) {
         setPerfilTaller(userDoc.data());
@@ -298,7 +297,6 @@ export default function DashboardTaller() {
     >
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Columna Izquierda: Lista de Vehículos Asignados */}
         <div className="lg:col-span-1 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden h-fit">
           <div className="p-4 bg-slate-800 text-white font-bold text-xs sm:text-sm uppercase tracking-wide">
             Vehículos Asignados y Agendados
@@ -328,7 +326,6 @@ export default function DashboardTaller() {
           </div>
         </div>
 
-        {/* Columna Derecha: Detalle de Checklist y Formulario de OT */}
         <div className="lg:col-span-2 space-y-6">
           {!citaSeleccionada ? (
             <div className="bg-white rounded-2xl shadow-sm p-8 sm:p-12 text-center border border-slate-200 text-slate-400 font-medium text-xs sm:text-sm">
@@ -336,7 +333,6 @@ export default function DashboardTaller() {
             </div>
           ) : (
             <>
-              {/* Checklist Previo */}
               <div className="bg-white rounded-2xl shadow-sm p-4 sm:p-6 border border-slate-200">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 border-b border-slate-100 pb-3 gap-2">
                   <h2 className="text-sm sm:text-base font-black text-slate-800">Checklist Previo (Reporte Conductor)</h2>
@@ -362,7 +358,6 @@ export default function DashboardTaller() {
                 )}
               </div>
 
-              {/* Formulario / Detalle de la Orden de Trabajo */}
               <div className="bg-white rounded-2xl shadow-sm p-4 sm:p-6 border border-slate-200">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 border-b border-slate-100 pb-3 gap-2">
                   <h2 className="text-base sm:text-lg font-black text-slate-800">

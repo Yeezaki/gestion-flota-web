@@ -312,7 +312,6 @@ export default function TabFlota({ busqueda, filtroTipoVehiculo }: TabFlotaProps
             <Link to="/generador" className="text-sm bg-blue-600 text-white font-bold px-4 py-2 rounded-xl hover:bg-blue-700 transition-colors"> + Nuevo Vehículo</Link>
           </div>
           
-          {/* VISTA ESCRITORIO */}
           <div className="hidden md:block overflow-x-auto w-full">
             <table className="w-full text-left border-collapse min-w-[1250px] whitespace-nowrap">
               <thead>
@@ -444,7 +443,6 @@ export default function TabFlota({ busqueda, filtroTipoVehiculo }: TabFlotaProps
             </table>
           </div>
 
-          {/* VISTA MÓVIL */}
           <div className="flex flex-col md:hidden gap-4 p-4 bg-slate-50/50">
             {vehiculosPaginados.length === 0 ? (
               <div className="bg-white rounded-2xl border border-slate-200 p-8 text-slate-400 text-center text-sm font-medium">No se encontraron vehículos.</div>
@@ -554,7 +552,6 @@ export default function TabFlota({ busqueda, filtroTipoVehiculo }: TabFlotaProps
         </div>
       </div>
 
-      {/* MODAL DE EDICIÓN CON 2 PESTAÑAS */}
       {vehiculoEditando && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
           <div className="bg-white rounded-3xl p-6 md:p-8 w-full max-w-3xl shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar border border-slate-100">
@@ -567,7 +564,6 @@ export default function TabFlota({ busqueda, filtroTipoVehiculo }: TabFlotaProps
             </div>
 
             <form onSubmit={guardarEdicionVehiculo} className="space-y-6">
-              {/* DATOS BÁSICOS DEL VEHÍCULO */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-black text-slate-400 uppercase mb-1 ml-1">Tipo</label>
@@ -607,7 +603,6 @@ export default function TabFlota({ busqueda, filtroTipoVehiculo }: TabFlotaProps
                 </div>
               </div>
 
-              {/* SELECTOR DE PESTAÑAS DE DOCUMENTOS */}
               <div className="pt-4 border-t border-slate-100">
                 <div className="flex gap-2 mb-4 bg-slate-100 p-1.5 rounded-2xl w-fit">
                   <button
@@ -630,10 +625,8 @@ export default function TabFlota({ busqueda, filtroTipoVehiculo }: TabFlotaProps
                   </button>
                 </div>
 
-                {/* PESTAÑA 1: VEHÍCULO */}
                 {pestanaModal === 'vehiculo' && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Rev. Técnica */}
                     <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
                       <label className="block text-xs font-black text-slate-600 uppercase mb-2">Revisión Técnica</label>
                       <input type="date" value={formEdit.vencimientoRevision} onChange={(e) => setFormEdit({ ...formEdit, vencimientoRevision: e.target.value })} className="w-full p-2.5 bg-white border border-slate-200 rounded-xl mb-3 text-xs font-medium focus:border-blue-500 focus:outline-none" />
@@ -648,7 +641,6 @@ export default function TabFlota({ busqueda, filtroTipoVehiculo }: TabFlotaProps
                       <input type="file" accept="application/pdf" onChange={(e) => setPdfRevisionEdit(e.target.files?.[0] ?? null)} className="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[11px] file:font-bold file:bg-white file:text-slate-700 hover:file:bg-slate-100" />
                     </div>
 
-                    {/* Permiso Circulación */}
                     <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
                       <label className="block text-xs font-black text-slate-600 uppercase mb-2">Permiso de Circulación</label>
                       <input type="date" value={formEdit.vencimientoCirculacion} onChange={(e) => setFormEdit({ ...formEdit, vencimientoCirculacion: e.target.value })} className="w-full p-2.5 bg-white border border-slate-200 rounded-xl mb-3 text-xs font-medium focus:border-blue-500 focus:outline-none" />
@@ -663,7 +655,6 @@ export default function TabFlota({ busqueda, filtroTipoVehiculo }: TabFlotaProps
                       <input type="file" accept="application/pdf" onChange={(e) => setPdfCirculacionEdit(e.target.files?.[0] ?? null)} className="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[11px] file:font-bold file:bg-white file:text-slate-700 hover:file:bg-slate-100" />
                     </div>
 
-                    {/* Certificado Mantención */}
                     <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
                       <label className="block text-xs font-black text-slate-600 uppercase mb-2">Certificado de Mantención</label>
                       <input type="date" value={formEdit.vencimientoCertificado} onChange={(e) => setFormEdit({ ...formEdit, vencimientoCertificado: e.target.value })} className="w-full p-2.5 bg-white border border-slate-200 rounded-xl mb-3 text-xs font-medium focus:border-blue-500 focus:outline-none" />
@@ -678,7 +669,6 @@ export default function TabFlota({ busqueda, filtroTipoVehiculo }: TabFlotaProps
                       <input type="file" accept="application/pdf" onChange={(e) => setPdfCertificadoEdit(e.target.files?.[0] ?? null)} className="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[11px] file:font-bold file:bg-white file:text-slate-700 hover:file:bg-slate-100" />
                     </div>
 
-                    {/* SOAP */}
                     <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
                       <label className="block text-xs font-black text-slate-600 uppercase mb-2">SOAP</label>
                       <input type="date" value={formEdit.vencimientoSoap} onChange={(e) => setFormEdit({ ...formEdit, vencimientoSoap: e.target.value })} className="w-full p-2.5 bg-white border border-slate-200 rounded-xl mb-3 text-xs font-medium focus:border-blue-500 focus:outline-none" />
@@ -693,7 +683,6 @@ export default function TabFlota({ busqueda, filtroTipoVehiculo }: TabFlotaProps
                       <input type="file" accept="application/pdf" onChange={(e) => setPdfSoapEdit(e.target.files?.[0] ?? null)} className="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[11px] file:font-bold file:bg-white file:text-slate-700 hover:file:bg-slate-100" />
                     </div>
 
-                    {/* Pauta Mantención */}
                     <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 md:col-span-2">
                       <label className="block text-xs font-black text-slate-600 uppercase mb-2">Pauta de Mantención (PDF)</label>
                       {formEdit.urlPauta ? (
@@ -709,10 +698,8 @@ export default function TabFlota({ busqueda, filtroTipoVehiculo }: TabFlotaProps
                   </div>
                 )}
 
-                {/* PESTAÑA 2: SEGURIDAD Y FAENA */}
                 {pestanaModal === 'faena' && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Certificado de Torque */}
                     <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
                       <label className="block text-xs font-black text-slate-600 uppercase mb-2">Certificado de Torque Vigente</label>
                       <input type="date" value={formEdit.vencimientoTorque} onChange={(e) => setFormEdit({ ...formEdit, vencimientoTorque: e.target.value })} className="w-full p-2.5 bg-white border border-slate-200 rounded-xl mb-3 text-xs font-medium focus:border-blue-500 focus:outline-none" />
@@ -727,7 +714,6 @@ export default function TabFlota({ busqueda, filtroTipoVehiculo }: TabFlotaProps
                       <input type="file" accept="application/pdf" onChange={(e) => setPdfTorqueEdit(e.target.files?.[0] ?? null)} className="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[11px] file:font-bold file:bg-white file:text-slate-700 hover:file:bg-slate-100" />
                     </div>
 
-                    {/* Mapa de Riesgos */}
                     <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
                       <label className="block text-xs font-black text-slate-600 uppercase mb-2">Mapa de Riesgos de Conducción</label>
                       {formEdit.urlMapaRiesgos ? (
@@ -741,7 +727,6 @@ export default function TabFlota({ busqueda, filtroTipoVehiculo }: TabFlotaProps
                       <input type="file" accept="application/pdf" onChange={(e) => setPdfMapaRiesgosEdit(e.target.files?.[0] ?? null)} className="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[11px] file:font-bold file:bg-white file:text-slate-700 hover:file:bg-slate-100" />
                     </div>
 
-                    {/* MIPER de Conducción */}
                     <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
                       <label className="block text-xs font-black text-slate-600 uppercase mb-2">MIPER de Conducción</label>
                       {formEdit.urlMiper ? (
@@ -755,7 +740,6 @@ export default function TabFlota({ busqueda, filtroTipoVehiculo }: TabFlotaProps
                       <input type="file" accept="application/pdf" onChange={(e) => setPdfMiperEdit(e.target.files?.[0] ?? null)} className="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[11px] file:font-bold file:bg-white file:text-slate-700 hover:file:bg-slate-100" />
                     </div>
 
-                    {/* Plan de Tránsito */}
                     <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
                       <label className="block text-xs font-black text-slate-600 uppercase mb-2">Plan de Tránsito</label>
                       {formEdit.urlPlanTransito ? (
@@ -769,7 +753,6 @@ export default function TabFlota({ busqueda, filtroTipoVehiculo }: TabFlotaProps
                       <input type="file" accept="application/pdf" onChange={(e) => setPdfPlanTransitoEdit(e.target.files?.[0] ?? null)} className="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[11px] file:font-bold file:bg-white file:text-slate-700 hover:file:bg-slate-100" />
                     </div>
 
-                    {/* Plan de Emergencia */}
                     <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
                       <label className="block text-xs font-black text-slate-600 uppercase mb-2">Plan de Emergencia</label>
                       {formEdit.urlPlanEmergencia ? (
@@ -783,7 +766,6 @@ export default function TabFlota({ busqueda, filtroTipoVehiculo }: TabFlotaProps
                       <input type="file" accept="application/pdf" onChange={(e) => setPdfPlanEmergenciaEdit(e.target.files?.[0] ?? null)} className="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[11px] file:font-bold file:bg-white file:text-slate-700 hover:file:bg-slate-100" />
                     </div>
 
-                    {/* Procedimiento de Conducción */}
                     <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
                       <label className="block text-xs font-black text-slate-600 uppercase mb-2">Procedimiento de Conducción</label>
                       {formEdit.urlProcedimientoConduccion ? (
@@ -797,7 +779,6 @@ export default function TabFlota({ busqueda, filtroTipoVehiculo }: TabFlotaProps
                       <input type="file" accept="application/pdf" onChange={(e) => setPdfProcedimientoEdit(e.target.files?.[0] ?? null)} className="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[11px] file:font-bold file:bg-white file:text-slate-700 hover:file:bg-slate-100" />
                     </div>
 
-                    {/* Control Alcohol y Drogas */}
                     <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 md:col-span-2">
                       <label className="block text-xs font-black text-slate-600 uppercase mb-2">Gestión y Control de Alcohol y Drogas</label>
                       {formEdit.urlAlcoholDrogas ? (
@@ -814,7 +795,6 @@ export default function TabFlota({ busqueda, filtroTipoVehiculo }: TabFlotaProps
                 )}
               </div>
 
-              {/* ACCIONES MODAL */}
               <div className="flex gap-4 justify-end pt-6 border-t border-slate-100">
                 <button type="button" onClick={() => setVehiculoEditando(null)} className="bg-slate-100 text-slate-600 font-bold px-6 py-3 rounded-xl hover:bg-slate-200 transition-colors text-sm">Cancelar</button>
                 <button type="submit" disabled={guardandoEdicion} className="bg-blue-600 text-white font-bold px-6 py-3 rounded-xl hover:bg-blue-700 transition-colors disabled:bg-slate-400 shadow-md text-sm">

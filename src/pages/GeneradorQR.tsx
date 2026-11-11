@@ -223,7 +223,6 @@ export default function GeneradorQR() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Formulario Principal */}
         <div className="lg:col-span-7 bg-white p-5 sm:p-7 rounded-3xl shadow-sm border border-slate-200">
           <form onSubmit={guardarYDescargar} className="space-y-5">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
@@ -321,14 +320,12 @@ export default function GeneradorQR() {
               </div>
             </div>
 
-            {/* Documentos Obligatorios */}
             <div className="border-t border-slate-100 pt-4 space-y-3">
               <h3 className="text-xs font-black text-slate-700 uppercase tracking-wider">
                 Documentación y Fechas de Vencimiento
               </h3>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* Revisión Técnica */}
                 <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 flex flex-col gap-2">
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-slate-700 text-xs">Revisión Técnica</span>
@@ -350,7 +347,6 @@ export default function GeneradorQR() {
                   </label>
                 </div>
 
-                {/* Permiso de Circulación */}
                 <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 flex flex-col gap-2">
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-slate-700 text-xs">Permiso Circulación</span>
@@ -372,7 +368,6 @@ export default function GeneradorQR() {
                   </label>
                 </div>
 
-                {/* Certificado Mantención */}
                 <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 flex flex-col gap-2">
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-slate-700 text-xs">Certificado Mantención</span>
@@ -394,7 +389,6 @@ export default function GeneradorQR() {
                   </label>
                 </div>
 
-                {/* SOAP */}
                 <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 flex flex-col gap-2">
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-slate-700 text-xs">Seguro SOAP</span>
@@ -417,7 +411,6 @@ export default function GeneradorQR() {
                 </div>
               </div>
 
-              {/* Pauta de Mantención */}
               <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 flex flex-col gap-2">
                 <div className="flex items-center justify-between">
                   <div>
@@ -449,7 +442,6 @@ export default function GeneradorQR() {
           </form>
         </div>
 
-        {/* Panel Lateral: Añadidos Recientemente */}
         <aside className="lg:col-span-5 bg-white p-5 sm:p-7 rounded-3xl shadow-sm border border-slate-200">
           <h2 className="text-sm font-black text-slate-800 uppercase tracking-wide border-b border-slate-100 pb-3 mb-4">
             Añadidos en esta Sesión ({sesionVehiculos.length})
@@ -465,7 +457,6 @@ export default function GeneradorQR() {
                 const qrUrl = `https://gestion-flota-web.vercel.app/v/${v.patente}`;
                 return (
                   <div key={v.id ?? v.patente} className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 shadow-sm">
-                    {/* Tarjeta oculta por patente */}
                     <div style={{ position: 'fixed', left: '-9999px', top: '-9999px', pointerEvents: 'none' }}>
                       <div id={`tarjeta-pdf-sesion-${v.patente}`} className="bg-white p-8 flex flex-col items-center justify-center" style={{ width: '400px', height: '600px' }}>
                         <img src={LOGO_BASE64} alt="Logo" style={{ height: '85px', objectFit: 'contain', marginBottom: '24px' }} />

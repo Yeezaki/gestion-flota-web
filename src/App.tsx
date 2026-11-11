@@ -65,13 +65,11 @@ function App() {
         <Route path="/agendar/:id" element={<AgendarHora />} />
         <Route path="/login" element={<Login />} />
         
-        {/* Rutas con Protección de Roles */}
         <Route path="/admin" element={<RutaPrivada rolPermitido="admin"><DashboardAdmin /></RutaPrivada>} />
         <Route path="/taller" element={<RutaPrivada rolPermitido="taller"><DashboardTaller /></RutaPrivada>} />
         <Route path="/generador" element={<RutaPrivada rolPermitido="admin"><GeneradorQR /></RutaPrivada>} />
         <Route path="/panel-generador" element={<RutaPrivada rolPermitido="generador_qr"><DashboardGenerador /></RutaPrivada>} />
         
-        {/* Nuevas Vistas Independientes */}
         <Route path="/prevencion" element={<RutaPrivada rolPermitido="prevencion_riesgo"><DashboardPrevencion /></RutaPrivada>} />
         <Route path="/torre-control" element={<RutaPrivada rolPermitido="torre_control"><DashboardTorreControl /></RutaPrivada>} />
 

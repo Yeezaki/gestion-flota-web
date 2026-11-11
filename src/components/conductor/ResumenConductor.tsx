@@ -339,7 +339,6 @@ export default function ResumenConductor({
         </div>
       )}
 
-      {/* Grid de documentos */}
       <div className="space-y-2">
         <h3 className="text-xs font-black uppercase tracking-wider text-slate-600">Documentación del Vehículo</h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -350,7 +349,6 @@ export default function ResumenConductor({
         </div>
       </div>
 
-      {/* Botones de Acción Final */}
       <div className="pt-2 flex flex-col sm:flex-row gap-3">
         {onRehacerChecklist && (
           <button
@@ -374,7 +372,6 @@ export default function ResumenConductor({
         </button>
       </div>
 
-      {/* Modal de Agendamiento */}
       {mostrarModalAgendar && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 p-4 backdrop-blur-sm flex justify-center items-center">
           <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl p-6 border border-slate-200 space-y-5 animate-fade-in">
