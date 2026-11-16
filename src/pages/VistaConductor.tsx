@@ -128,8 +128,8 @@ export default function VistaConductor() {
     }
   });
 
-  const [testDrogasNotificado, setTestDrogasNotificado] = useState(false);
-  const [registrandoNotificacionDrogas, setRegistrandoNotificacionDrogas] = useState(false);
+  // Se inicia en true para saltar la pantalla de aviso de control de drogas
+  const [testDrogasNotificado, setTestDrogasNotificado] = useState(true);
 
   const [parejaTests, setParejaTests] = useState<[TipoTestPVT, TipoTestPVT]>(['seguimiento', 'reaccion']);
   const [testActualIndice, setTestActualIndice] = useState<number>(0);
@@ -167,14 +167,6 @@ export default function VistaConductor() {
 
   const [fotoLicenciaPreview, setFotoLicenciaPreview] = useState<string | null>(null);
   const [fotoLicencia, setFotoLicencia] = useState<File | null>(null);
-
-  /* OCULTO: Estados de Licencia Interna de Faena
-  const [fotoLicenciaInternaPreview, setFotoLicenciaInternaPreview] = useState<string | null>(null);
-  const [fotoLicenciaInterna, setFotoLicenciaInterna] = useState<File | null>(null);
-
-  const [fotoLicenciaInternaTraseraPreview, setFotoLicenciaInternaTraseraPreview] = useState<string | null>(null);
-  const [fotoLicenciaInternaTrasera, setFotoLicenciaInternaTrasera] = useState<File | null>(null);
-  */
 
   const [encuestaCompletada, setEncuestaCompletada] = useState(false);
   const [bloqueado, setBloqueado] = useState(false);
@@ -319,24 +311,6 @@ export default function VistaConductor() {
     }
   };
 
-  /* OCULTO: Funciones captura Licencia Interna de Faena
-  const capturarLicenciaInternaFrontal = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setFotoLicenciaInterna(file);
-      crearPreviewImagen(file, (url) => setFotoLicenciaInternaPreview(url));
-    }
-  };
-
-  const capturarLicenciaInternaTrasera = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setFotoLicenciaInternaTrasera(file);
-      crearPreviewImagen(file, (url) => setFotoLicenciaInternaTraseraPreview(url));
-    }
-  };
-  */
-
   const capturarFotoTablero = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
@@ -435,27 +409,23 @@ export default function VistaConductor() {
     try {
       let fotoUrl = null;
       let fotoPath = null;
-      if (fotoFile) {
-        fotoPath = `kilometrajes/${patenteValida}-${Date.now()}-${fotoFile.name}`;
+      const archivoTablero = fotoPreview ? base64ToFile(fotoPreview, `tablero_${patenteValida}.jpg`) : fotoFile;
+      if (archivoTablero) {
+        fotoPath = `kilometrajes/${patenteValida}-${Date.now()}-${archivoTablero.name}`;
         const storageRef = ref(storage, fotoPath);
-        await uploadBytes(storageRef, fotoFile);
+        await uploadBytes(storageRef, archivoTablero);
         fotoUrl = await getDownloadURL(storageRef);
       }
 
       let licenciaUrl = null;
       let licenciaPath = null;
-      const archivoLicencia = fotoLicencia || (fotoLicenciaPreview ? base64ToFile(fotoLicenciaPreview, `licencia_${patenteValida}.jpg`) : null);
+      const archivoLicencia = fotoLicenciaPreview ? base64ToFile(fotoLicenciaPreview, `licencia_${patenteValida}.jpg`) : fotoLicencia;
       if (archivoLicencia) {
         licenciaPath = `licencias/${patenteValida}-${Date.now()}-${archivoLicencia.name}`;
         const licenciaRef = ref(storage, licenciaPath);
         await uploadBytes(licenciaRef, archivoLicencia);
         licenciaUrl = await getDownloadURL(licenciaRef);
       }
-
-      const licenciaInternaUrl = null;
-      const licenciaInternaPath = null;
-      const licenciaInternaTraseraUrl = null;
-      const licenciaInternaTraseraPath = null;
 
       let firmaUrl = null;
       let firmaPath = null;
@@ -478,15 +448,15 @@ export default function VistaConductor() {
         fotoPath,
         licenciaUrl,
         licenciaPath,
-        licenciaInternaUrl,
-        licenciaInternaPath,
-        licenciaInternaTraseraUrl,
-        licenciaInternaTraseraPath,
+        licenciaInternaUrl: null,
+        licenciaInternaPath: null,
+        licenciaInternaTraseraUrl: null,
+        licenciaInternaTraseraPath: null,
         firmaUrl,
         firmaPath,
         fallaCritica: tieneFallaCritica,
         bloqueoPorTestCognitivo: false,
-        testDrogasNotificado: true,
+        testDrogasNotificado: false,
         respuestas: respuestasChecklist,
         testsCognitivos: datosTests,
         puntajePVT: puntajeGlobalPVT,
@@ -522,15 +492,24 @@ export default function VistaConductor() {
           return timeA - timeB;
         });
 
+        const borrarArchivoSilencioso = async (ruta?: string | null) => {
+          if (!ruta) return;
+          try {
+            await deleteObject(ref(storage, ruta));
+          } catch {
+            // Ignorar archivos que ya fueron eliminados previamente
+          }
+        };
+
         const toDelete = reportsArray.slice(0, reportsArray.length - 5);
         for (const item of toDelete) {
           const data = item.data;
-          if (data.fotoPath) await deleteObject(ref(storage, data.fotoPath)).catch(() => null);
-          if (data.firmaPath) await deleteObject(ref(storage, data.firmaPath)).catch(() => null);
-          if (data.licenciaPath) await deleteObject(ref(storage, data.licenciaPath)).catch(() => null);
-          if (data.licenciaInternaPath) await deleteObject(ref(storage, data.licenciaInternaPath)).catch(() => null);
-          if (data.licenciaInternaTraseraPath) await deleteObject(ref(storage, data.licenciaInternaTraseraPath)).catch(() => null);
-          await deleteDoc(item.ref);
+          await borrarArchivoSilencioso(data.fotoPath);
+          await borrarArchivoSilencioso(data.firmaPath);
+          await borrarArchivoSilencioso(data.licenciaPath);
+          await borrarArchivoSilencioso(data.licenciaInternaPath);
+          await borrarArchivoSilencioso(data.licenciaInternaTraseraPath);
+          await deleteDoc(item.ref).catch((err) => console.warn('No se pudo borrar reporte antiguo:', err));
         }
       }
 
@@ -599,7 +578,7 @@ export default function VistaConductor() {
       return;
     }
 
-    setRegistrandoNotificacionDrogas(true);
+    /* OCULTO: Registro automatico y pantalla de citacion a control de alcohol y drogas
     try {
       await addDoc(collection(db, 'controles_alcohol_drogas'), {
         patente: patenteValida,
@@ -617,9 +596,8 @@ export default function VistaConductor() {
       );
     } catch (error) {
       console.error("Error registrando citacion a control de drogas:", error);
-    } finally {
-      setRegistrandoNotificacionDrogas(false);
     }
+    */
 
     const parejaElegida = seleccionarParejaAleatoria();
     setParejaTests(parejaElegida);
@@ -628,7 +606,7 @@ export default function VistaConductor() {
     setMostrarPantallaPuntajePVT(false);
     setBloqueado(false);
     setMotivoBloqueo(null);
-    setTestDrogasNotificado(false);
+    setTestDrogasNotificado(true);
     setIdentificado(true);
   };
 
@@ -665,7 +643,7 @@ export default function VistaConductor() {
         />
       )}
 
-      {/* 2. Pantalla de Aviso: Seleccion para Control de Alcohol y Drogas */}
+      {/* OCULTO: 2. Pantalla de Aviso: Seleccion para Control de Alcohol y Drogas
       {identificado && !testDrogasNotificado && !bloqueado && (
         <div className="bg-white/95 backdrop-blur-md p-6 md:p-8 rounded-3xl shadow-2xl max-w-md w-full border border-amber-300 animate-fade-in relative z-10 text-center my-6">
           <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-3 shadow-inner">
@@ -673,15 +651,12 @@ export default function VistaConductor() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
           </div>
-
           <span className="bg-amber-100 text-amber-800 text-xs font-black uppercase px-3 py-1 rounded-full shadow-sm tracking-wider">
             Control de Seguridad
           </span>
-
           <h2 className="text-2xl font-black text-slate-800 mt-2 leading-tight">
             Has sido seleccionado
           </h2>
-
           <div className="bg-amber-50 border border-amber-200/80 rounded-2xl p-4 my-4 text-left">
             <p className="text-sm font-bold text-amber-900 leading-snug">
               Has sido seleccionado para realizar el test de alcohol y drogas obligatorio.
@@ -690,88 +665,16 @@ export default function VistaConductor() {
               Por favor, dirigete de inmediato al area de <strong>Prevencion de Riesgos</strong> para la toma de la muestra antes de comenzar tu ruta.
             </p>
           </div>
-
-          {/* OCULTO: Adjuntar fotografia Licencia Interna de Faena (Ambos Lados)
-          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 mb-5 text-left">
-            <label className="block text-xs font-black text-slate-700 uppercase mb-1">
-              Licencia Interna de Faena (Ambos Lados)
-            </label>
-            <p className="text-[11px] text-slate-500 mb-3">
-              Adjunta fotografia de la cara frontal y de la cara trasera de tu credencial de faena:
-            </p>
-
-            <div className="grid grid-cols-2 gap-2.5">
-              <label className="block cursor-pointer">
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  onChange={capturarLicenciaInternaFrontal}
-                  className="hidden"
-                />
-                <div className="border-2 border-dashed border-slate-300 bg-white rounded-xl p-3 text-center hover:bg-slate-100 transition-all shadow-sm">
-                  {fotoLicenciaInternaPreview ? (
-                    <div className="flex flex-col items-center">
-                      <img
-                        src={fotoLicenciaInternaPreview}
-                        className="h-14 w-auto rounded object-cover mb-1 shadow-sm"
-                        alt="Frontal"
-                      />
-                      <span className="text-[10px] font-bold text-emerald-700">Frontal OK</span>
-                    </div>
-                  ) : (
-                    <div className="py-2">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-slate-400 mx-auto mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                      </svg>
-                      <span className="text-[11px] font-bold text-slate-600 block">+ Cara Frontal</span>
-                    </div>
-                  )}
-                </div>
-              </label>
-
-              <label className="block cursor-pointer">
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  onChange={capturarLicenciaInternaTrasera}
-                  className="hidden"
-                />
-                <div className="border-2 border-dashed border-slate-300 bg-white rounded-xl p-3 text-center hover:bg-slate-100 transition-all shadow-sm">
-                  {fotoLicenciaInternaTraseraPreview ? (
-                    <div className="flex flex-col items-center">
-                      <img
-                        src={fotoLicenciaInternaTraseraPreview}
-                        className="h-14 w-auto rounded object-cover mb-1 shadow-sm"
-                        alt="Trasera"
-                      />
-                      <span className="text-[10px] font-bold text-emerald-700">Trasera OK</span>
-                    </div>
-                  ) : (
-                    <div className="py-2">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-slate-400 mx-auto mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                      </svg>
-                      <span className="text-[11px] font-bold text-slate-600 block">+ Cara Trasera</span>
-                    </div>
-                  )}
-                </div>
-              </label>
-            </div>
-          </div>
-          */}
-
           <button
             type="button"
-            disabled={registrandoNotificacionDrogas}
             onClick={() => setTestDrogasNotificado(true)}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl shadow-lg transition-all active:scale-[0.98]"
           >
-            {registrandoNotificacionDrogas ? 'Registrando en sistema...' : 'Entendido, continuar a pruebas psicomotoras'}
+            Entendido, continuar a pruebas psicomotoras
           </button>
         </div>
       )}
+      */}
 
       {/* 3. Pruebas Psicomotoras Aleatorias */}
       {identificado && testDrogasNotificado && !fasePVTCompletada && !bloqueado && (
@@ -859,7 +762,7 @@ export default function VistaConductor() {
         </div>
       )}
 
-      {/* 7. Formulario de Checklist (sin bloque de Documentacion y Seguridad de Operacion) */}
+      {/* 7. Formulario de Checklist */}
       {identificado && testDrogasNotificado && fasePVTCompletada && !mostrarPantallaPuntajePVT && !encuestaCompletada && !bloqueado && (
         <div className="w-full max-w-2xl space-y-4">
           <FormChecklist
