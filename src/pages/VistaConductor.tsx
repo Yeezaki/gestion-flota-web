@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
-import { collection, addDoc, updateDoc, doc, serverTimestamp, query, where, getDocs, deleteDoc, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, serverTimestamp, query, where, getDocs, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage } from '../lib/firebase';
 
@@ -10,20 +10,6 @@ import TestSeguimiento from '../components/conductor/TestSeguimiento';
 import TestMemoriaSecuencia from '../components/conductor/TestMemoriaSecuencia';
 import FormChecklist from '../components/conductor/FormChecklist';
 import ResumenConductor from '../components/conductor/ResumenConductor';
-import { ModalVisorDocumento } from '../components/conductor/ModalVisorDocumento';
-import { ChecklistEmergenciaConductor } from '../components/conductor/ChecklistEmergenciaConductor';
-import { PantallaEsperaPVT } from '../components/conductor/PantallaEsperaPVT';
-import {
-  verificarBloqueoPVT,
-  registrarBloqueoPVT
-} from '../services/pvtLockService';
-
-import { SAFETY_DOCUMENTS } from '../constants';
-import type {
-  EvaluacionEmergenciaRegistro,
-  FirmaDocumento,
-  SafetyDocumentType
-} from '../constants';
 
 type TipoTestPVT = 'reaccion' | 'seguimiento' | 'memoria';
 
@@ -152,11 +138,6 @@ export default function VistaConductor() {
   const [datosTests, setDatosTests] = useState<any[]>([]);
   const [puntajeGlobalPVT, setPuntajeGlobalPVT] = useState<number>(100);
 
-  const [datosBloqueoPVT, setDatosBloqueoPVT] = useState<{
-    bloqueadoHasta: number;
-    nivelRiesgo: string;
-  } | null>(null);
-
   const [ubicacionGPS, setUbicacionGPS] = useState<any>(() => {
     try {
       const cache = sessionStorage.getItem(storageKey);
@@ -187,11 +168,13 @@ export default function VistaConductor() {
   const [fotoLicenciaPreview, setFotoLicenciaPreview] = useState<string | null>(null);
   const [fotoLicencia, setFotoLicencia] = useState<File | null>(null);
 
+  /* OCULTO: Estados de Licencia Interna de Faena
   const [fotoLicenciaInternaPreview, setFotoLicenciaInternaPreview] = useState<string | null>(null);
   const [fotoLicenciaInterna, setFotoLicenciaInterna] = useState<File | null>(null);
 
   const [fotoLicenciaInternaTraseraPreview, setFotoLicenciaInternaTraseraPreview] = useState<string | null>(null);
   const [fotoLicenciaInternaTrasera, setFotoLicenciaInternaTrasera] = useState<File | null>(null);
+  */
 
   const [encuestaCompletada, setEncuestaCompletada] = useState(false);
   const [bloqueado, setBloqueado] = useState(false);
@@ -230,21 +213,22 @@ export default function VistaConductor() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [tieneFirma, setTieneFirma] = useState(false);
 
-  const [docSeleccionado, setDocSeleccionado] = useState<SafetyDocumentType | null>(null);
-  const [mostrarChecklistEmergencia, setMostrarChecklistEmergencia] = useState(false);
-
   const [preguntasPrevencionRemotas, setPreguntasPrevencionRemotas] = useState<any[]>([]);
 
   useEffect(() => {
-    const qPrev = query(collection(db, 'preguntas_prevencion'), where('activa', '==', true), orderBy('creadoEn', 'asc'));
+    const qPrev = query(collection(db, 'preguntas_prevencion'), where('activa', '==', true));
     const unsub = onSnapshot(qPrev, (snap) => {
-      const preguntas = snap.docs.map(d => ({
-        id: `prev_${d.id}`,
-        texto: d.data().texto,
-        esCritica: true,
-        origen: 'prevencion'
-      }));
-      setPreguntasPrevencionRemotas(preguntas);
+      const docsOrdenados = snap.docs
+        .map(d => ({
+          id: `prev_${d.id}`,
+          texto: d.data().texto,
+          esCritica: true,
+          origen: 'prevencion',
+          creadoEn: d.data().creadoEn?.toMillis?.() || 0
+        }))
+        .sort((a, b) => a.creadoEn - b.creadoEn);
+
+      setPreguntasPrevencionRemotas(docsOrdenados);
     }, (err) => console.error("Error cargando preguntas de prevencion:", err));
 
     return () => unsub();
@@ -285,7 +269,7 @@ export default function VistaConductor() {
       try {
         const qVehiculo = query(collection(db, 'vehiculos'), where('patente', '==', patenteValida));
         const snapVehiculo = await getDocs(qVehiculo);
-        
+
         if (!snapVehiculo.empty) {
           const vData = snapVehiculo.docs[0].data();
           setVehiculo(vData);
@@ -293,7 +277,7 @@ export default function VistaConductor() {
 
           const kmRealAnterior = Number(vData.kilometrajeActual) || 0;
           setKilometrajeAnterior(kmRealAnterior);
-          
+
           setKilometraje((prev: string) => prev ? prev : (kmRealAnterior > 0 ? kmRealAnterior.toString() : ''));
         } else {
           console.warn(`No se encontro vehiculo con patente ${patenteValida}`);
@@ -335,6 +319,7 @@ export default function VistaConductor() {
     }
   };
 
+  /* OCULTO: Funciones captura Licencia Interna de Faena
   const capturarLicenciaInternaFrontal = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
@@ -350,6 +335,7 @@ export default function VistaConductor() {
       crearPreviewImagen(file, (url) => setFotoLicenciaInternaTraseraPreview(url));
     }
   };
+  */
 
   const capturarFotoTablero = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -386,7 +372,7 @@ export default function VistaConductor() {
 
   const calcularEstadoVencimiento = (fechaString: string) => {
     if (!fechaString) return { texto: 'No registrado', clase: 'bg-white/60 text-slate-500 border-white/60' };
-    
+
     const [year, month, day] = fechaString.split('-').map(Number);
     const fechaVencimiento = new Date(year, month - 1, day);
     const hoy = new Date();
@@ -438,7 +424,6 @@ export default function VistaConductor() {
 
     setSubiendo(true);
 
-    // Criterio estricto: cualquier "NO" activa falla critica y rechaza el vehiculo
     let tieneFallaCritica = false;
     preguntasDinamicas.forEach((p) => {
       const resp = String(respuestasChecklist[p.id] || '').toLowerCase().trim();
@@ -467,25 +452,10 @@ export default function VistaConductor() {
         licenciaUrl = await getDownloadURL(licenciaRef);
       }
 
-      let licenciaInternaUrl = null;
-      let licenciaInternaPath = null;
-      const archivoLicenciaInterna = fotoLicenciaInterna || (fotoLicenciaInternaPreview ? base64ToFile(fotoLicenciaInternaPreview, `licencia_interna_frontal_${patenteValida}.jpg`) : null);
-      if (archivoLicenciaInterna) {
-        licenciaInternaPath = `licencias_internas/${patenteValida}-${Date.now()}-frontal-${archivoLicenciaInterna.name}`;
-        const licenciaInternaRef = ref(storage, licenciaInternaPath);
-        await uploadBytes(licenciaInternaRef, archivoLicenciaInterna);
-        licenciaInternaUrl = await getDownloadURL(licenciaInternaRef);
-      }
-
-      let licenciaInternaTraseraUrl = null;
-      let licenciaInternaTraseraPath = null;
-      const archivoLicenciaInternaTrasera = fotoLicenciaInternaTrasera || (fotoLicenciaInternaTraseraPreview ? base64ToFile(fotoLicenciaInternaTraseraPreview, `licencia_interna_trasera_${patenteValida}.jpg`) : null);
-      if (archivoLicenciaInternaTrasera) {
-        licenciaInternaTraseraPath = `licencias_internas/${patenteValida}-${Date.now()}-trasera-${archivoLicenciaInternaTrasera.name}`;
-        const licenciaInternaTraseraRef = ref(storage, licenciaInternaTraseraPath);
-        await uploadBytes(licenciaInternaTraseraRef, archivoLicenciaInternaTrasera);
-        licenciaInternaTraseraUrl = await getDownloadURL(licenciaInternaTraseraRef);
-      }
+      const licenciaInternaUrl = null;
+      const licenciaInternaPath = null;
+      const licenciaInternaTraseraUrl = null;
+      const licenciaInternaTraseraPath = null;
 
       let firmaUrl = null;
       let firmaPath = null;
@@ -527,7 +497,7 @@ export default function VistaConductor() {
       if (tieneFallaCritica) {
         await registrarEnHistorial(
           'BLOQUEO_CHECKLIST',
-          `Vehiculo ${patenteValida} bloqueado por fallas criticas en checklist. PVT aprobado (${puntajeGlobalPVT}%). Conductor: ${nombreConductor}`
+          `Vehiculo ${patenteValida} bloqueado por fallas criticas en checklist. PVT: ${puntajeGlobalPVT}%. Conductor: ${nombreConductor}`
         );
       } else {
         await registrarEnHistorial(
@@ -595,69 +565,18 @@ export default function VistaConductor() {
     return Math.max(0, Math.min(100, puntos));
   };
 
-  const obtenerRangoRiesgo = (puntaje: number): string => {
-    if (puntaje >= 80) return 'bajo';
-    if (puntaje >= 65) return 'medio';
-    if (puntaje >= 50) return 'medio-alto';
-    return 'alto';
-  };
-
+  // Bloqueo por PVT desactivado: siempre avanza sin bloquear al conductor
   const procesarResultadoTestGenerico = async (resultado: any) => {
     const nuevosTests = [...datosTests, resultado];
     setDatosTests(nuevosTests);
     const notaCalculada = calcularNotaGlobal(nuevosTests);
     setPuntajeGlobalPVT(notaCalculada);
 
-    const rangoRiesgo = obtenerRangoRiesgo(notaCalculada);
-
-    if (!resultado.aprobado || rangoRiesgo !== 'bajo') {
-      const resBloqueo = await registrarBloqueoPVT(
-        rutConductor,
-        rangoRiesgo,
-        nombreConductor,
-        patenteValida
-      );
-
-      setDatosBloqueoPVT({
-        bloqueadoHasta: resBloqueo.bloqueadoHasta,
-        nivelRiesgo: rangoRiesgo
-      });
-
-      setMotivoBloqueo('pvt');
-      setBloqueado(true);
-
-      try {
-        await addDoc(collection(db, 'reportes'), {
-          vehiculoId: patenteValida,
-          tipoVehiculo: tipoActual,
-          conductorNombre: nombreConductor,
-          conductorRut: rutConductor,
-          kilometraje: kilometraje || "No ingresado",
-          fallaCritica: true,
-          bloqueoPorTestCognitivo: true,
-          nivelRiesgoPVT: rangoRiesgo,
-          minutosEsperaPVT: resBloqueo.minutosRestantes,
-          testFallido: resultado,
-          testsCognitivos: nuevosTests,
-          puntajePVT: notaCalculada,
-          ubicacion: ubicacionGPS || null,
-          fecha: serverTimestamp()
-        });
-
-        await registrarEnHistorial(
-          'BLOQUEO_TEST_PVT',
-          `Conductor ${nombreConductor} (${rutConductor}) bloqueado ${resBloqueo.minutosRestantes} min por nivel de fatiga ${rangoRiesgo.toUpperCase()} (${notaCalculada}%). Patente: ${patenteValida}`
-        );
-      } catch (err) {
-        console.error(err);
-      }
+    if (testActualIndice === 0) {
+      setTestActualIndice(1);
     } else {
-      if (testActualIndice === 0) {
-        setTestActualIndice(1);
-      } else {
-        setFasePVTCompletada(true);
-        setMostrarPantallaPuntajePVT(true);
-      }
+      setFasePVTCompletada(true);
+      setMostrarPantallaPuntajePVT(true);
     }
   };
 
@@ -674,63 +593,10 @@ export default function VistaConductor() {
     }
   };
 
-  const handleGuardarFirmaDocumento = async (registro: FirmaDocumento) => {
-    try {
-      await addDoc(collection(db, 'firmas_documentos'), {
-        ...registro,
-        patente: patenteValida,
-        creadoEn: serverTimestamp()
-      });
-      await registrarEnHistorial(
-        'FIRMA_DOCUMENTO_SEGURIDAD',
-        `Conductor ${nombreConductor} firmo y tomo conocimiento de: ${SAFETY_DOCUMENTS[registro.documentoId]?.titulo}`
-      );
-      alert(`Documento firmado con exito: ${SAFETY_DOCUMENTS[registro.documentoId]?.titulo}`);
-    } catch (e) {
-      console.error(e);
-      alert('Error al guardar la firma en el servidor.');
-    }
-  };
-
-  const handleGuardarEvaluacionEmergencia = async (registro: EvaluacionEmergenciaRegistro) => {
-    try {
-      await addDoc(collection(db, 'evaluaciones_emergencia'), {
-        ...registro,
-        patente: patenteValida,
-        creadoEn: serverTimestamp()
-      });
-      await registrarEnHistorial(
-        'EVALUACION_EMERGENCIA',
-        `Conductor ${nombreConductor} completo el checklist de emergencia. Puntaje: ${registro.puntaje}/${registro.totalPreguntas} (${registro.aprobado ? 'Aprobado' : 'Rechazado'})`
-      );
-      alert('Evaluacion de emergencia guardada con exito.');
-      setMostrarChecklistEmergencia(false);
-    } catch (e) {
-      console.error(e);
-      alert('Error al guardar la evaluacion de emergencia.');
-    }
-  };
-
   const handleValidarContinuarIdentificacion = async () => {
     if (!rutConductor.trim()) {
       alert("Por favor ingrese su RUT antes de continuar.");
       return;
-    }
-
-    try {
-      const estadoBloqueo = await verificarBloqueoPVT(rutConductor);
-      if (estadoBloqueo.bloqueado && estadoBloqueo.bloqueadoHasta) {
-        setDatosBloqueoPVT({
-          bloqueadoHasta: estadoBloqueo.bloqueadoHasta,
-          nivelRiesgo: estadoBloqueo.nivelRiesgo || 'medio'
-        });
-        setMotivoBloqueo('pvt');
-        setBloqueado(true);
-        setIdentificado(true);
-        return;
-      }
-    } catch (err) {
-      console.error("Error al validar bloqueo inicial:", err);
     }
 
     setRegistrandoNotificacionDrogas(true);
@@ -762,7 +628,6 @@ export default function VistaConductor() {
     setMostrarPantallaPuntajePVT(false);
     setBloqueado(false);
     setMotivoBloqueo(null);
-    setDatosBloqueoPVT(null);
     setTestDrogasNotificado(false);
     setIdentificado(true);
   };
@@ -800,7 +665,7 @@ export default function VistaConductor() {
         />
       )}
 
-      {/* 2. Pantalla de Aviso: Seleccion para Control de Alcohol y Drogas + Licencia de Faena */}
+      {/* 2. Pantalla de Aviso: Seleccion para Control de Alcohol y Drogas */}
       {identificado && !testDrogasNotificado && !bloqueado && (
         <div className="bg-white/95 backdrop-blur-md p-6 md:p-8 rounded-3xl shadow-2xl max-w-md w-full border border-amber-300 animate-fade-in relative z-10 text-center my-6">
           <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-3 shadow-inner">
@@ -826,6 +691,7 @@ export default function VistaConductor() {
             </p>
           </div>
 
+          {/* OCULTO: Adjuntar fotografia Licencia Interna de Faena (Ambos Lados)
           <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 mb-5 text-left">
             <label className="block text-xs font-black text-slate-700 uppercase mb-1">
               Licencia Interna de Faena (Ambos Lados)
@@ -894,17 +760,12 @@ export default function VistaConductor() {
               </label>
             </div>
           </div>
+          */}
 
           <button
             type="button"
             disabled={registrandoNotificacionDrogas}
-            onClick={() => {
-              if (!fotoLicenciaInternaPreview || !fotoLicenciaInternaTraseraPreview) {
-                const proceder = window.confirm("Aun no has adjuntado ambos lados de tu licencia interna de faena. Deseas continuar a las pruebas?");
-                if (!proceder) return;
-              }
-              setTestDrogasNotificado(true);
-            }}
+            onClick={() => setTestDrogasNotificado(true)}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl shadow-lg transition-all active:scale-[0.98]"
           >
             {registrandoNotificacionDrogas ? 'Registrando en sistema...' : 'Entendido, continuar a pruebas psicomotoras'}
@@ -931,14 +792,14 @@ export default function VistaConductor() {
             </svg>
           </div>
           <span className="bg-green-100 text-green-800 text-xs font-black uppercase px-3 py-1 rounded-full shadow-sm">
-            Pruebas Aprobadas
+            Pruebas Completadas
           </span>
           <h2 className="text-2xl font-black text-slate-800 mt-2">Aptitud Psicomotora</h2>
-          
+
           <div className="bg-white/80 rounded-2xl p-4 my-5 border border-slate-200 shadow-sm">
             <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Calificacion de Vigilia</div>
             <div className="text-4xl font-black text-blue-600 my-1">{puntajeGlobalPVT}%</div>
-            <p className="text-xs text-slate-600 font-medium">Reflejos y atencion dentro de los rangos de seguridad.</p>
+            <p className="text-xs text-slate-600 font-medium">Evaluacion registrada correctamente.</p>
           </div>
 
           <button
@@ -951,8 +812,8 @@ export default function VistaConductor() {
         </div>
       )}
 
-      {/* 5. Pantalla de Bloqueo */}
-      {bloqueado && !mostrarResumen && (
+      {/* 5. Pantalla de Bloqueo (solo por fallas en Checklist) */}
+      {bloqueado && !mostrarResumen && motivoBloqueo === 'checklist' && (
         <div className="bg-white/70 backdrop-blur-md p-8 rounded-3xl shadow-2xl max-w-md border-2 border-red-500/80 animate-fade-in w-full relative z-10 text-center">
           <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -962,60 +823,28 @@ export default function VistaConductor() {
 
           <h1 className="text-2xl font-black text-red-700">VEHICULO BLOQUEADO</h1>
 
-          {motivoBloqueo === 'checklist' ? (
-            <div className="mt-4 space-y-4">
-              <p className="text-slate-700 text-sm font-medium">
-                Se detectaron una o mas <strong>fallas criticas en el checklist de inspeccion y prevencion</strong>. Por normativa de seguridad, este vehiculo no puede iniciar ruta.
-              </p>
-              <div className="bg-green-50 border border-green-200 text-green-800 p-3 rounded-2xl text-xs font-bold flex items-center justify-center gap-2">
-                <span>Evaluacion psicomotora: Aprobada ({puntajeGlobalPVT}%)</span>
-              </div>
-              <p className="text-xs text-slate-500 font-medium">
-                Debes coordinar la hora de ingreso al taller antes de finalizar la jornada.
-              </p>
+          <div className="mt-4 space-y-4">
+            <p className="text-slate-700 text-sm font-medium">
+              Se detectaron una o mas <strong>fallas criticas en el checklist de inspeccion y prevencion</strong>. Por normativa de seguridad, este vehiculo no puede iniciar ruta.
+            </p>
+            <div className="bg-green-50 border border-green-200 text-green-800 p-3 rounded-2xl text-xs font-bold flex items-center justify-center gap-2">
+              <span>Evaluacion psicomotora: {puntajeGlobalPVT}%</span>
+            </div>
+            <p className="text-xs text-slate-500 font-medium">
+              Debes coordinar la hora de ingreso al taller antes de finalizar la jornada.
+            </p>
 
-              <button
-                type="button"
-                onClick={() => setMostrarResumen(true)}
-                className="w-full bg-amber-600 hover:bg-amber-700 text-white font-black py-4 rounded-2xl text-xs shadow-lg transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                Agendar Hora en Taller y Ver Resumen
-              </button>
-            </div>
-          ) : (
-            <div className="mt-4 space-y-4">
-              {datosBloqueoPVT ? (
-                <PantallaEsperaPVT
-                  rut={rutConductor}
-                  bloqueadoHasta={datosBloqueoPVT.bloqueadoHasta}
-                  nivelRiesgo={datosBloqueoPVT.nivelRiesgo}
-                  onExpirado={() => {
-                    setBloqueado(false);
-                    setMotivoBloqueo(null);
-                    setDatosBloqueoPVT(null);
-                    setFasePVTCompletada(false);
-                    setTestActualIndice(0);
-                    setDatosTests([]);
-                  }}
-                />
-              ) : (
-                <>
-                  <p className="text-slate-700 text-sm font-medium">
-                    Evaluacion psicomotora no superada (Puntaje: {puntajeGlobalPVT}%). Se detectaron indicios de fatiga, reflejos lentos o falta de atencion.
-                  </p>
-                  <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-2xl text-xs font-bold">
-                    Bloqueo preventivo de seguridad. El checklist quedo inhabilitado.
-                  </div>
-                  <p className="text-xs text-slate-500 font-medium">
-                    Avisa al supervisor a cargo para reasignacion o pausa reglamentaria.
-                  </p>
-                </>
-              )}
-            </div>
-          )}
+            <button
+              type="button"
+              onClick={() => setMostrarResumen(true)}
+              className="w-full bg-amber-600 hover:bg-amber-700 text-white font-black py-4 rounded-2xl text-xs shadow-lg transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              Agendar Hora en Taller y Ver Resumen
+            </button>
+          </div>
         </div>
       )}
 
@@ -1030,68 +859,9 @@ export default function VistaConductor() {
         </div>
       )}
 
-      {/* 7. Formulario de Checklist */}
+      {/* 7. Formulario de Checklist (sin bloque de Documentacion y Seguridad de Operacion) */}
       {identificado && testDrogasNotificado && fasePVTCompletada && !mostrarPantallaPuntajePVT && !encuestaCompletada && !bloqueado && (
         <div className="w-full max-w-2xl space-y-4">
-          <div className="bg-white/85 backdrop-blur-md rounded-2xl border border-white/60 p-5 shadow-xl space-y-4">
-            <div>
-              <h3 className="text-xs font-black uppercase tracking-wider text-slate-800">
-                Documentacion y Seguridad de Operacion
-              </h3>
-              <p className="text-[11px] text-slate-600 font-medium">
-                Consulte las 2 hojas de cada protocolo obligatorio y confirme mediante su firma digital.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              <button
-                type="button"
-                onClick={() => setDocSeleccionado('mapa_riesgo')}
-                className="p-3 rounded-xl border border-slate-200 bg-white hover:bg-blue-50/70 hover:border-blue-400 transition-all text-left shadow-sm flex flex-col justify-between"
-              >
-                <span className="text-xs font-bold text-slate-800">Mapa de riesgo de conduccion</span>
-                <span className="text-[10px] text-blue-600 font-semibold mt-1">Ver 2 hojas y firmar</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setDocSeleccionado('procedimiento_conduccion')}
-                className="p-3 rounded-xl border border-slate-200 bg-white hover:bg-blue-50/70 hover:border-blue-400 transition-all text-left shadow-sm flex flex-col justify-between"
-              >
-                <span className="text-xs font-bold text-slate-800">Procedimiento de conduccion</span>
-                <span className="text-[10px] text-blue-600 font-semibold mt-1">Ver 2 hojas y firmar</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setDocSeleccionado('plan_transito')}
-                className="p-3 rounded-xl border border-slate-200 bg-white hover:bg-blue-50/70 hover:border-blue-400 transition-all text-left shadow-sm flex flex-col justify-between"
-              >
-                <span className="text-xs font-bold text-slate-800">Plan de transito</span>
-                <span className="text-[10px] text-blue-600 font-semibold mt-1">Ver 2 hojas y firmar</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setDocSeleccionado('plan_emergencia')}
-                className="p-3 rounded-xl border border-slate-200 bg-white hover:bg-blue-50/70 hover:border-blue-400 transition-all text-left shadow-sm flex flex-col justify-between"
-              >
-                <span className="text-xs font-bold text-slate-800">Plan de emergencia</span>
-                <span className="text-[10px] text-blue-600 font-semibold mt-1">Ver 2 hojas y firmar</span>
-              </button>
-            </div>
-
-            <div className="pt-2 border-t border-slate-200/60 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setMostrarChecklistEmergencia(true)}
-                className="px-4 py-2 text-xs font-bold text-white bg-slate-800 hover:bg-slate-900 rounded-xl shadow transition-colors"
-              >
-                Realizar Evaluacion de Emergencia (Cuestionario)
-              </button>
-            </div>
-          </div>
-
           <FormChecklist
             idPatente={patenteValida}
             nombreConductor={nombreConductor}
@@ -1150,35 +920,6 @@ export default function VistaConductor() {
           <button onClick={() => { sessionStorage.removeItem(storageKey); window.location.reload(); }} className="text-sm font-bold text-slate-600 hover:text-slate-900 transition-colors">
             Volver a escanear QR
           </button>
-        </div>
-      )}
-
-      {/* Modal de Lectura y Firma de Documentos */}
-      {docSeleccionado && (
-        <ModalVisorDocumento
-          documentoId={docSeleccionado}
-          conductorUid={rutConductor || patenteValida}
-          conductorNombre={nombreConductor || 'Conductor sin registrar'}
-          conductorRut={rutConductor || 'Sin RUT'}
-          isOpen={Boolean(docSeleccionado)}
-          onClose={() => setDocSeleccionado(null)}
-          onGuardarFirma={handleGuardarFirmaDocumento}
-        />
-      )}
-
-      {/* Modal de Checklist de Emergencia con Scroll Corregido */}
-      {mostrarChecklistEmergencia && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/80 p-3 sm:p-4 backdrop-blur-sm flex justify-center items-start min-h-full py-6">
-          <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden my-auto border border-slate-200">
-            <ChecklistEmergenciaConductor
-              conductorUid={rutConductor || patenteValida}
-              conductorNombre={nombreConductor || 'Conductor sin registrar'}
-              conductorRut={rutConductor || 'Sin RUT'}
-              cantidadPreguntas={3}
-              onGuardarEvaluacion={handleGuardarEvaluacionEmergencia}
-              onCerrar={() => setMostrarChecklistEmergencia(false)}
-            />
-          </div>
         </div>
       )}
     </div>

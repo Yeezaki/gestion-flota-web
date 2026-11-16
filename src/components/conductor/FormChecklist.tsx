@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 type FormChecklistProps = {
   idPatente: string;
@@ -44,32 +44,66 @@ export default function FormChecklist({
 }: FormChecklistProps) {
   const [firmando, setFirmando] = useState(false);
 
+  // Ajuste de resolucion Retina (iPhone / iPad) y grosor de trazo para el canvas de firma
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) {
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.scale(dpr, dpr);
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.lineWidth = 2.5;
+        ctx.strokeStyle = '#0f172a';
+      }
+    }
+  }, [canvasRef]);
+
+  const obtenerCoordenadas = (
+    e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>,
+    canvas: HTMLCanvasElement
+  ) => {
+    const rect = canvas.getBoundingClientRect();
+    if ('touches' in e && e.touches.length > 0) {
+      return {
+        x: e.touches[0].clientX - rect.left,
+        y: e.touches[0].clientY - rect.top
+      };
+    }
+    const mouseEvent = e as React.MouseEvent<HTMLCanvasElement>;
+    return {
+      x: mouseEvent.clientX - rect.left,
+      y: mouseEvent.clientY - rect.top
+    };
+  };
+
   const iniciarFirma = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    if ('touches' in e) e.preventDefault();
     setFirmando(true);
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const rect = canvas.getBoundingClientRect();
-    const x = 'touches' in e ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
-    const y = 'touches' in e ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
-
+    const { x, y } = obtenerCoordenadas(e, canvas);
     ctx.beginPath();
     ctx.moveTo(x, y);
   };
 
   const dibujarFirma = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    if ('touches' in e) e.preventDefault();
     if (!firmando) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const rect = canvas.getBoundingClientRect();
-    const x = 'touches' in e ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
-    const y = 'touches' in e ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
-
+    const { x, y } = obtenerCoordenadas(e, canvas);
     ctx.lineTo(x, y);
     ctx.stroke();
     setTieneFirma(true);
@@ -98,9 +132,9 @@ export default function FormChecklist({
           <span className="text-[10px] font-bold leading-tight mt-1 text-center">{estado.texto}</span>
         </div>
         {url && (
-          <button 
+          <button
             type="button"
-            onClick={() => forzarDescarga(url, nombreArchivo)} 
+            onClick={() => forzarDescarga(url, nombreArchivo)}
             className="mt-auto w-full flex items-center justify-center gap-1.5 bg-slate-800/85 hover:bg-slate-900 text-white text-[11px] font-bold py-2 px-1 rounded-xl shadow transition-all active:scale-95"
           >
             Descargar
@@ -120,9 +154,9 @@ export default function FormChecklist({
         </span>
       </div>
       {url && (
-        <button 
+        <button
           type="button"
-          onClick={() => forzarDescarga(url, nombreArchivo)} 
+          onClick={() => forzarDescarga(url, nombreArchivo)}
           className="mt-auto w-full flex items-center justify-center gap-1.5 bg-blue-700 hover:bg-blue-800 text-white text-[11px] font-bold py-2 px-1 rounded-xl shadow transition-all active:scale-95"
         >
           Descargar Pauta
@@ -173,19 +207,21 @@ export default function FormChecklist({
                 <span className="text-blue-600 font-bold ml-2">(Anterior: {kilometrajeAnterior.toLocaleString('es-CL')} km)</span>
               )}
             </label>
-            <input 
-              type="number" 
+            <input
+              type="number"
+              inputMode="numeric"
               value={kilometraje}
               onChange={(e) => setKilometraje(e.target.value)}
               min={kilometrajeAnterior > 0 ? kilometrajeAnterior : 0}
-              className="w-full p-3 bg-white/70 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white/90 focus:outline-none font-bold text-slate-800 shadow-sm" 
+              className="w-full p-3 bg-white/70 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white/90 focus:outline-none font-bold text-slate-800 shadow-sm"
             />
           </div>
           <div className="text-center text-slate-400 text-sm font-black uppercase tracking-widest">O</div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Foto del Tablero</label>
             <label className="block w-full cursor-pointer">
-              <input type="file" accept="image/*" capture="environment" onChange={onCapturarFotoTablero} className="hidden" />
+              {/* Sin capture="environment" para permitir Camara y Galeria en iPhone, iPad y Android */}
+              <input type="file" accept="image/*" onChange={onCapturarFotoTablero} className="hidden" />
               <div className="border-2 border-dashed border-slate-300 bg-white/60 rounded-xl p-4 text-center hover:bg-white/80 transition-all shadow-sm">
                 {fotoPreview ? (
                   <div className="flex flex-col items-center">
@@ -198,7 +234,7 @@ export default function FormChecklist({
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
-                    Tomar foto con la cámara
+                    Tomar o seleccionar foto
                   </span>
                 )}
               </div>
@@ -244,11 +280,9 @@ export default function FormChecklist({
             <label className="block text-sm font-bold text-slate-800">Firma del Conductor *</label>
             <button type="button" onClick={limpiarFirma} className="text-xs text-red-600 font-bold hover:underline">Limpiar firma</button>
           </div>
-          <div className="border-2 border-slate-300 rounded-2xl bg-white/80 overflow-hidden shadow-sm touch-none">
+          <div className="border-2 border-slate-300 rounded-2xl bg-white/80 overflow-hidden shadow-sm" style={{ touchAction: 'none' }}>
             <canvas
               ref={canvasRef}
-              width={350}
-              height={150}
               onMouseDown={iniciarFirma}
               onMouseMove={dibujarFirma}
               onMouseUp={detenerFirma}
@@ -256,7 +290,7 @@ export default function FormChecklist({
               onTouchStart={iniciarFirma}
               onTouchMove={dibujarFirma}
               onTouchEnd={detenerFirma}
-              className="w-full h-[150px] cursor-crosshair bg-white/50"
+              className="w-full h-[150px] block cursor-crosshair bg-white/50"
             />
           </div>
           <p className="text-[10px] text-slate-500 mt-1 italic text-center">Firme dentro del recuadro usando su dedo o el mouse.</p>
