@@ -12,6 +12,7 @@ import FormChecklist from '../components/conductor/FormChecklist';
 import ResumenConductor from '../components/conductor/ResumenConductor';
 
 type TipoTestPVT = 'reaccion' | 'seguimiento' | 'memoria';
+type MotivoBloqueo = 'pvt' | 'checklist' | 'ambos' | null;
 
 const preguntasBasePorTipo = {
   'Tracto camión': [
@@ -128,9 +129,11 @@ export default function VistaConductor() {
     }
   });
 
-  // Se inicia en true para saltar la pantalla de aviso de control de drogas
-  const [testDrogasNotificado, setTestDrogasNotificado] = useState(true);
+  // Paso 2: Checklist primero
+  const [checklistCompletado, setChecklistCompletado] = useState(false);
+  const [datosChecklistPendiente, setDatosChecklistPendiente] = useState<any>(null);
 
+  // Paso 3: Juegos PVT al final
   const [parejaTests, setParejaTests] = useState<[TipoTestPVT, TipoTestPVT]>(['seguimiento', 'reaccion']);
   const [testActualIndice, setTestActualIndice] = useState<number>(0);
   const [fasePVTCompletada, setFasePVTCompletada] = useState(false);
@@ -170,7 +173,7 @@ export default function VistaConductor() {
 
   const [encuestaCompletada, setEncuestaCompletada] = useState(false);
   const [bloqueado, setBloqueado] = useState(false);
-  const [motivoBloqueo, setMotivoBloqueo] = useState<'pvt' | 'checklist' | 'droga' | null>(null);
+  const [motivoBloqueo, setMotivoBloqueo] = useState<MotivoBloqueo>(null);
   const [mostrarResumen, setMostrarResumen] = useState(false);
   const [jornadaFinalizada, setJornadaFinalizada] = useState(false);
 
@@ -198,6 +201,7 @@ export default function VistaConductor() {
   });
 
   const [subiendo, setSubiendo] = useState(false);
+  const [guardandoFinal, setGuardandoFinal] = useState(false);
   const [vehiculo, setVehiculo] = useState<any>(null);
   const [vehiculoIdDoc, setVehiculoIdDoc] = useState<string | null>(null);
   const [cargandoVehiculo, setCargandoVehiculo] = useState(true);
@@ -287,7 +291,7 @@ export default function VistaConductor() {
     if (encuestaCompletada) {
       const timer = setTimeout(() => {
         setMostrarResumen(true);
-      }, 2500);
+      }, 2000);
       return () => clearTimeout(timer);
     }
   }, [encuestaCompletada]);
@@ -320,6 +324,7 @@ export default function VistaConductor() {
   };
 
   const forzarDescarga = async (url: string, nombreArchivo: string) => {
+    if (!url) return;
     const esIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.userAgent.includes("Mac") && "ontouchend" in document);
 
     if (esIOS) {
@@ -329,6 +334,7 @@ export default function VistaConductor() {
 
     try {
       const response = await fetch(url);
+      if (!response.ok) throw new Error('Error de red al descargar');
       const blob = await response.blob();
       const urlBlob = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -337,10 +343,19 @@ export default function VistaConductor() {
       a.download = nombreArchivo;
       document.body.appendChild(a);
       a.click();
-      window.URL.revokeObjectURL(urlBlob);
-    } catch (error) {
-      console.error(error);
-      window.open(url, '_blank', 'noopener,noreferrer');
+      setTimeout(() => {
+        window.URL.revokeObjectURL(urlBlob);
+        document.body.removeChild(a);
+      }, 200);
+    } catch {
+      const a = document.createElement('a');
+      a.href = url;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.download = nombreArchivo;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
     }
   };
 
@@ -367,6 +382,7 @@ export default function VistaConductor() {
 
   const preguntasDinamicas = [...preguntasPrevencionRemotas, ...preguntasVehiculoBase];
 
+  // Paso 2: Procesa el Check-list y avanza a los juegos PVT sin bloquear aun
   const manejarEnvioChecklist = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
@@ -376,7 +392,7 @@ export default function VistaConductor() {
     }
 
     if (!tieneFirma) {
-      alert("La firma del conductor es obligatoria para enviar el reporte.");
+      alert("La firma del conductor es obligatoria para continuar.");
       return;
     }
 
@@ -438,41 +454,120 @@ export default function VistaConductor() {
         firmaUrl = await getDownloadURL(firmaRef);
       }
 
-      await addDoc(collection(db, 'reportes'), {
-        vehiculoId: patenteValida,
-        tipoVehiculo: tipoActual,
-        conductorNombre: nombreConductor,
-        conductorRut: rutConductor,
+      setDatosChecklistPendiente({
         kilometraje: kilometraje || "No ingresado",
         fotoUrl,
         fotoPath,
         licenciaUrl,
         licenciaPath,
+        firmaUrl,
+        firmaPath,
+        tieneFallaCritica,
+        respuestas: { ...respuestasChecklist }
+      });
+
+      const parejaElegida = seleccionarParejaAleatoria();
+      setParejaTests(parejaElegida);
+      setTestActualIndice(0);
+      setDatosTests([]);
+      setFasePVTCompletada(false);
+      setMostrarPantallaPuntajePVT(false);
+      setChecklistCompletado(true);
+    } catch (error) {
+      console.error(error);
+      alert("Hubo un error al subir las evidencias del checklist. Verifica tu conexion a internet.");
+    } finally {
+      setSubiendo(false);
+    }
+  };
+
+  const calcularNotaGlobal = (tests: any[]) => {
+    let puntos = 100;
+    tests.forEach((t) => {
+      if (!t.aprobado) puntos -= 40;
+      if (t.erroresComision) puntos -= (t.erroresComision * 10);
+      if (t.erroresOmision) puntos -= (t.erroresOmision * 10);
+      if (t.promedioMs && t.promedioMs > 580 && t.tipoTest && t.tipoTest.includes('Reaccion')) {
+        const penalizacionMs = Math.min(20, Math.round((t.promedioMs - 580) / 10));
+        puntos -= penalizacionMs;
+      }
+    });
+    return Math.max(0, Math.min(100, puntos));
+  };
+
+  // Paso 3 y 4: Finaliza PVT, guarda reporte unificado y determina bloqueos (checklist, pvt o ambos)
+  const procesarResultadoTestGenerico = async (resultado: any) => {
+    const nuevosTests = [...datosTests, resultado];
+    setDatosTests(nuevosTests);
+    const notaCalculada = calcularNotaGlobal(nuevosTests);
+    setPuntajeGlobalPVT(notaCalculada);
+
+    if (testActualIndice === 0) {
+      setTestActualIndice(1);
+      return;
+    }
+
+    setGuardandoFinal(true);
+
+    const falloChecklist = Boolean(datosChecklistPendiente?.tieneFallaCritica);
+    const falloPVT = notaCalculada < 60 || nuevosTests.some((t) => t.aprobado === false);
+
+    let motivoFinal: MotivoBloqueo = null;
+    if (falloChecklist && falloPVT) {
+      motivoFinal = 'ambos';
+    } else if (falloChecklist) {
+      motivoFinal = 'checklist';
+    } else if (falloPVT) {
+      motivoFinal = 'pvt';
+    }
+
+    try {
+      await addDoc(collection(db, 'reportes'), {
+        vehiculoId: patenteValida,
+        tipoVehiculo: tipoActual,
+        conductorNombre: nombreConductor,
+        conductorRut: rutConductor,
+        kilometraje: datosChecklistPendiente?.kilometraje || kilometraje || "No ingresado",
+        fotoUrl: datosChecklistPendiente?.fotoUrl || null,
+        fotoPath: datosChecklistPendiente?.fotoPath || null,
+        licenciaUrl: datosChecklistPendiente?.licenciaUrl || null,
+        licenciaPath: datosChecklistPendiente?.licenciaPath || null,
         licenciaInternaUrl: null,
         licenciaInternaPath: null,
         licenciaInternaTraseraUrl: null,
         licenciaInternaTraseraPath: null,
-        firmaUrl,
-        firmaPath,
-        fallaCritica: tieneFallaCritica,
-        bloqueoPorTestCognitivo: false,
+        firmaUrl: datosChecklistPendiente?.firmaUrl || null,
+        firmaPath: datosChecklistPendiente?.firmaPath || null,
+        fallaCritica: falloChecklist,
+        bloqueoPorTestCognitivo: falloPVT,
+        motivoBloqueo: motivoFinal,
         testDrogasNotificado: false,
-        respuestas: respuestasChecklist,
-        testsCognitivos: datosTests,
-        puntajePVT: puntajeGlobalPVT,
+        respuestas: datosChecklistPendiente?.respuestas || respuestasChecklist,
+        testsCognitivos: nuevosTests,
+        puntajePVT: notaCalculada,
         ubicacion: ubicacionGPS || null,
         fecha: serverTimestamp()
       });
 
-      if (tieneFallaCritica) {
+      if (motivoFinal === 'ambos') {
+        await registrarEnHistorial(
+          'BLOQUEO_AMBOS',
+          `Vehiculo ${patenteValida} bloqueado por fallas en checklist y baja aptitud PVT (${notaCalculada}%). Conductor: ${nombreConductor}`
+        );
+      } else if (motivoFinal === 'checklist') {
         await registrarEnHistorial(
           'BLOQUEO_CHECKLIST',
-          `Vehiculo ${patenteValida} bloqueado por fallas criticas en checklist. PVT: ${puntajeGlobalPVT}%. Conductor: ${nombreConductor}`
+          `Vehiculo ${patenteValida} bloqueado por fallas criticas en checklist. PVT: ${notaCalculada}%. Conductor: ${nombreConductor}`
+        );
+      } else if (motivoFinal === 'pvt') {
+        await registrarEnHistorial(
+          'BLOQUEO_PVT',
+          `Conductor ${nombreConductor} (${rutConductor}) bloqueado por baja aptitud psicomotora PVT (${notaCalculada}%) en vehiculo ${patenteValida}`
         );
       } else {
         await registrarEnHistorial(
           'CHECKLIST_COMPLETADO',
-          `Vehiculo ${patenteValida} operativo. PVT: ${puntajeGlobalPVT}%. Conductor: ${nombreConductor}`
+          `Vehiculo ${patenteValida} operativo. PVT: ${notaCalculada}%. Conductor: ${nombreConductor}`
         );
       }
 
@@ -497,7 +592,7 @@ export default function VistaConductor() {
           try {
             await deleteObject(ref(storage, ruta));
           } catch {
-            // Ignorar archivos que ya fueron eliminados previamente
+            // Ignorar archivos eliminados previamente
           }
         };
 
@@ -515,47 +610,14 @@ export default function VistaConductor() {
 
       sessionStorage.removeItem(storageKey);
 
-      if (tieneFallaCritica) {
-        setMotivoBloqueo('checklist');
-        setBloqueado(true);
-      } else {
-        setEncuestaCompletada(true);
-      }
-
-    } catch (error) {
-      console.error(error);
-      alert("Hubo un error al enviar el reporte. Verifica tu conexion a internet.");
-    } finally {
-      setSubiendo(false);
-    }
-  };
-
-  const calcularNotaGlobal = (tests: any[]) => {
-    let puntos = 100;
-    tests.forEach((t) => {
-      if (!t.aprobado) puntos -= 40;
-      if (t.erroresComision) puntos -= (t.erroresComision * 10);
-      if (t.erroresOmision) puntos -= (t.erroresOmision * 10);
-      if (t.promedioMs && t.promedioMs > 580 && t.tipoTest && t.tipoTest.includes('Reaccion')) {
-        const penalizacionMs = Math.min(20, Math.round((t.promedioMs - 580) / 10));
-        puntos -= penalizacionMs;
-      }
-    });
-    return Math.max(0, Math.min(100, puntos));
-  };
-
-  // Bloqueo por PVT desactivado: siempre avanza sin bloquear al conductor
-  const procesarResultadoTestGenerico = async (resultado: any) => {
-    const nuevosTests = [...datosTests, resultado];
-    setDatosTests(nuevosTests);
-    const notaCalculada = calcularNotaGlobal(nuevosTests);
-    setPuntajeGlobalPVT(notaCalculada);
-
-    if (testActualIndice === 0) {
-      setTestActualIndice(1);
-    } else {
+      setMotivoBloqueo(motivoFinal);
       setFasePVTCompletada(true);
       setMostrarPantallaPuntajePVT(true);
+    } catch (error) {
+      console.error(error);
+      alert("Hubo un error al guardar el reporte final. Verifica tu conexion a internet.");
+    } finally {
+      setGuardandoFinal(false);
     }
   };
 
@@ -578,36 +640,24 @@ export default function VistaConductor() {
       return;
     }
 
-    /* OCULTO: Registro automatico y pantalla de citacion a control de alcohol y drogas
-    try {
-      await addDoc(collection(db, 'controles_alcohol_drogas'), {
-        patente: patenteValida,
-        conductorNombre: nombreConductor,
-        conductorRut: rutConductor,
-        estado: 'pendiente',
-        fechaSeleccion: serverTimestamp(),
-        tipoSeleccion: 'Obligatorio / Pruebas',
-        ubicacion: ubicacionGPS || null
-      });
-
-      await registrarEnHistorial(
-        'SELECCION_CONTROL_DROGAS',
-        `Conductor ${nombreConductor} (${rutConductor}) citado a control de alcohol y drogas para patente ${patenteValida}`
-      );
-    } catch (error) {
-      console.error("Error registrando citacion a control de drogas:", error);
-    }
-    */
-
-    const parejaElegida = seleccionarParejaAleatoria();
-    setParejaTests(parejaElegida);
-    setTestActualIndice(0);
+    setChecklistCompletado(false);
+    setDatosChecklistPendiente(null);
     setFasePVTCompletada(false);
     setMostrarPantallaPuntajePVT(false);
+    setDatosTests([]);
+    setTestActualIndice(0);
     setBloqueado(false);
     setMotivoBloqueo(null);
-    setTestDrogasNotificado(true);
     setIdentificado(true);
+  };
+
+  const handleContinuarDesdePuntajePVT = () => {
+    setMostrarPantallaPuntajePVT(false);
+    if (motivoBloqueo !== null) {
+      setBloqueado(true);
+    } else {
+      setEncuestaCompletada(true);
+    }
   };
 
   const handleRehacerChecklist = () => {
@@ -615,11 +665,19 @@ export default function VistaConductor() {
     setFotoPreview(null);
     setFotoFile(null);
     setTieneFirma(false);
+    setChecklistCompletado(false);
+    setDatosChecklistPendiente(null);
+    setFasePVTCompletada(false);
+    setMostrarPantallaPuntajePVT(false);
+    setDatosTests([]);
+    setTestActualIndice(0);
     setBloqueado(false);
     setMotivoBloqueo(null);
     setEncuestaCompletada(false);
     setMostrarResumen(false);
   };
+
+  const pvtAprobado = motivoBloqueo !== 'pvt' && motivoBloqueo !== 'ambos';
 
   return (
     <div className="min-h-screen bg-cover bg-center bg-fixed bg-no-repeat flex flex-col items-center justify-center p-4 md:p-6 relative" style={{ backgroundImage: "url('/fondo-conductor.jpg')" }}>
@@ -643,127 +701,8 @@ export default function VistaConductor() {
         />
       )}
 
-      {/* OCULTO: 2. Pantalla de Aviso: Seleccion para Control de Alcohol y Drogas
-      {identificado && !testDrogasNotificado && !bloqueado && (
-        <div className="bg-white/95 backdrop-blur-md p-6 md:p-8 rounded-3xl shadow-2xl max-w-md w-full border border-amber-300 animate-fade-in relative z-10 text-center my-6">
-          <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-3 shadow-inner">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-          </div>
-          <span className="bg-amber-100 text-amber-800 text-xs font-black uppercase px-3 py-1 rounded-full shadow-sm tracking-wider">
-            Control de Seguridad
-          </span>
-          <h2 className="text-2xl font-black text-slate-800 mt-2 leading-tight">
-            Has sido seleccionado
-          </h2>
-          <div className="bg-amber-50 border border-amber-200/80 rounded-2xl p-4 my-4 text-left">
-            <p className="text-sm font-bold text-amber-900 leading-snug">
-              Has sido seleccionado para realizar el test de alcohol y drogas obligatorio.
-            </p>
-            <p className="text-xs text-amber-800 mt-1.5 font-medium">
-              Por favor, dirigete de inmediato al area de <strong>Prevencion de Riesgos</strong> para la toma de la muestra antes de comenzar tu ruta.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setTestDrogasNotificado(true)}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl shadow-lg transition-all active:scale-[0.98]"
-          >
-            Entendido, continuar a pruebas psicomotoras
-          </button>
-        </div>
-      )}
-      */}
-
-      {/* 3. Pruebas Psicomotoras Aleatorias */}
-      {identificado && testDrogasNotificado && !fasePVTCompletada && !bloqueado && (
-        <div className="w-full flex flex-col items-center">
-          <div className="mb-3 text-[11px] font-black uppercase tracking-wider text-slate-700 bg-white/70 backdrop-blur-sm px-4 py-1.5 rounded-full shadow-sm">
-            Bateria Psicomotora: Prueba {testActualIndice + 1} de 2
-          </div>
-          {renderComponenteTest(parejaTests[testActualIndice])}
-        </div>
-      )}
-
-      {/* 4. Tarjeta de Puntaje de Pruebas Psicomotoras */}
-      {identificado && testDrogasNotificado && fasePVTCompletada && mostrarPantallaPuntajePVT && !bloqueado && (
-        <div className="bg-white/70 backdrop-blur-md p-8 rounded-3xl shadow-2xl max-w-md w-full border border-white/60 animate-fade-in relative z-10 text-center">
-          <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <span className="bg-green-100 text-green-800 text-xs font-black uppercase px-3 py-1 rounded-full shadow-sm">
-            Pruebas Completadas
-          </span>
-          <h2 className="text-2xl font-black text-slate-800 mt-2">Aptitud Psicomotora</h2>
-
-          <div className="bg-white/80 rounded-2xl p-4 my-5 border border-slate-200 shadow-sm">
-            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Calificacion de Vigilia</div>
-            <div className="text-4xl font-black text-blue-600 my-1">{puntajeGlobalPVT}%</div>
-            <p className="text-xs text-slate-600 font-medium">Evaluacion registrada correctamente.</p>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setMostrarPantallaPuntajePVT(false)}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl shadow-lg transition-all"
-          >
-            Continuar al Checklist
-          </button>
-        </div>
-      )}
-
-      {/* 5. Pantalla de Bloqueo (solo por fallas en Checklist) */}
-      {bloqueado && !mostrarResumen && motivoBloqueo === 'checklist' && (
-        <div className="bg-white/70 backdrop-blur-md p-8 rounded-3xl shadow-2xl max-w-md border-2 border-red-500/80 animate-fade-in w-full relative z-10 text-center">
-          <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-          </div>
-
-          <h1 className="text-2xl font-black text-red-700">VEHICULO BLOQUEADO</h1>
-
-          <div className="mt-4 space-y-4">
-            <p className="text-slate-700 text-sm font-medium">
-              Se detectaron una o mas <strong>fallas criticas en el checklist de inspeccion y prevencion</strong>. Por normativa de seguridad, este vehiculo no puede iniciar ruta.
-            </p>
-            <div className="bg-green-50 border border-green-200 text-green-800 p-3 rounded-2xl text-xs font-bold flex items-center justify-center gap-2">
-              <span>Evaluacion psicomotora: {puntajeGlobalPVT}%</span>
-            </div>
-            <p className="text-xs text-slate-500 font-medium">
-              Debes coordinar la hora de ingreso al taller antes de finalizar la jornada.
-            </p>
-
-            <button
-              type="button"
-              onClick={() => setMostrarResumen(true)}
-              className="w-full bg-amber-600 hover:bg-amber-700 text-white font-black py-4 rounded-2xl text-xs shadow-lg transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              Agendar Hora en Taller y Ver Resumen
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* 6. Enviando reporte */}
-      {encuestaCompletada && !mostrarResumen && (
-        <div className="bg-white/60 backdrop-blur-md p-8 rounded-2xl shadow-xl max-w-md border-2 border-green-500/80 animate-fade-in w-full relative z-10 border border-white/50 text-center">
-          <h1 className="text-2xl font-black text-green-700">Reporte Enviado</h1>
-          <p className="mt-2 text-slate-700 font-medium">Generando resumen y validando documentos...</p>
-          <div className="mt-6 flex justify-center">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-green-600"></div>
-          </div>
-        </div>
-      )}
-
-      {/* 7. Formulario de Checklist */}
-      {identificado && testDrogasNotificado && fasePVTCompletada && !mostrarPantallaPuntajePVT && !encuestaCompletada && !bloqueado && (
+      {/* 2. Formulario de Checklist (Primero) */}
+      {identificado && !checklistCompletado && !encuestaCompletada && !bloqueado && (
         <div className="w-full max-w-2xl space-y-4">
           <FormChecklist
             idPatente={patenteValida}
@@ -789,13 +728,146 @@ export default function VistaConductor() {
         </div>
       )}
 
-      {/* 8. Resumen de Jornada */}
+      {/* 3. Pruebas Psicomotoras Aleatorias PVT (Despues del Checklist) */}
+      {identificado && checklistCompletado && !fasePVTCompletada && !guardandoFinal && !bloqueado && (
+        <div className="w-full flex flex-col items-center">
+          <div className="mb-3 text-[11px] font-black uppercase tracking-wider text-slate-700 bg-white/70 backdrop-blur-sm px-4 py-1.5 rounded-full shadow-sm">
+            Bateria Psicomotora: Prueba {testActualIndice + 1} de 2
+          </div>
+          {renderComponenteTest(parejaTests[testActualIndice])}
+        </div>
+      )}
+
+      {/* Guardando reporte final */}
+      {guardandoFinal && (
+        <div className="bg-white/80 backdrop-blur-md p-8 rounded-3xl shadow-2xl max-w-md border border-white/60 animate-fade-in w-full relative z-10 text-center">
+          <h2 className="text-xl font-black text-slate-800">Procesando Evaluacion Integral</h2>
+          <p className="mt-2 text-sm text-slate-600 font-medium">Consolidando resultados de checklist y pruebas PVT...</p>
+          <div className="mt-6 flex justify-center">
+            <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-blue-600"></div>
+          </div>
+        </div>
+      )}
+
+      {/* 4. Tarjeta de Puntaje de Pruebas Psicomotoras */}
+      {identificado && checklistCompletado && fasePVTCompletada && mostrarPantallaPuntajePVT && !bloqueado && (
+        <div className="bg-white/85 backdrop-blur-md p-8 rounded-3xl shadow-2xl max-w-md w-full border border-white/60 animate-fade-in relative z-10 text-center">
+          <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner ${pvtAprobado ? 'bg-blue-100 text-blue-600' : 'bg-rose-100 text-rose-600'}`}>
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              {pvtAprobado ? (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              ) : (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              )}
+            </svg>
+          </div>
+          <span className={`text-xs font-black uppercase px-3 py-1 rounded-full shadow-sm ${pvtAprobado ? 'bg-green-100 text-green-800' : 'bg-rose-100 text-rose-800'}`}>
+            {pvtAprobado ? 'Pruebas Completadas' : 'Alerta de Fatiga / Vigilia'}
+          </span>
+          <h2 className="text-2xl font-black text-slate-800 mt-2">Aptitud Psicomotora</h2>
+
+          <div className="bg-white/90 rounded-2xl p-4 my-5 border border-slate-200 shadow-sm">
+            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Calificacion de Vigilia</div>
+            <div className={`text-4xl font-black my-1 ${pvtAprobado ? 'text-blue-600' : 'text-rose-600'}`}>{puntajeGlobalPVT}%</div>
+            <p className="text-xs text-slate-600 font-medium">
+              {pvtAprobado
+                ? 'Evaluacion psicomotora dentro de parametros operativos.'
+                : 'Puntaje bajo el umbral minimo de seguridad requerido.'}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleContinuarDesdePuntajePVT}
+            className={`w-full text-white font-black py-4 rounded-2xl shadow-lg transition-all ${pvtAprobado ? 'bg-blue-600 hover:bg-blue-700' : 'bg-rose-600 hover:bg-rose-700'}`}
+          >
+            Ver Resultado de Habilitacion
+          </button>
+        </div>
+      )}
+
+      {/* 5. Pantalla Unificada de Bloqueo Final (Checklist, PVT o Ambos) */}
+      {bloqueado && !mostrarResumen && motivoBloqueo !== null && (
+        <div className="bg-white/90 backdrop-blur-md p-8 rounded-3xl shadow-2xl max-w-md border-2 border-red-500/80 animate-fade-in w-full relative z-10 text-center">
+          <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+
+          <span className="bg-red-100 text-red-800 text-[11px] font-black uppercase px-3 py-1 rounded-full tracking-wider">
+            {motivoBloqueo === 'ambos' && 'Bloqueo por Check-list y Prueba PVT'}
+            {motivoBloqueo === 'checklist' && 'Bloqueo por Falla en Check-list'}
+            {motivoBloqueo === 'pvt' && 'Bloqueo por Prueba Psicomotora PVT'}
+          </span>
+
+          <h1 className="text-2xl font-black text-red-700 mt-2">OPERACION BLOQUEADA</h1>
+
+          <div className="mt-4 space-y-4">
+            {motivoBloqueo === 'ambos' && (
+              <p className="text-slate-700 text-sm font-medium">
+                Se detectaron <strong>fallas criticas en el check-list del vehiculo</strong> y ademas tu <strong>evaluacion psicomotora PVT ({puntajeGlobalPVT}%)</strong> no alcanzo el minimo requerido. No puedes iniciar ruta.
+              </p>
+            )}
+
+            {motivoBloqueo === 'checklist' && (
+              <p className="text-slate-700 text-sm font-medium">
+                Se detectaron una o mas <strong>fallas criticas en el check-list de inspeccion y prevencion</strong>. Por normativa de seguridad, este vehiculo no puede iniciar ruta.
+              </p>
+            )}
+
+            {motivoBloqueo === 'pvt' && (
+              <p className="text-slate-700 text-sm font-medium">
+                Tu resultado en las <strong>pruebas psicomotoras PVT ({puntajeGlobalPVT}%)</strong> indica fatiga o falta de vigilia. Por seguridad operativa, no estas habilitado para conducir.
+              </p>
+            )}
+
+            <div className="grid grid-cols-2 gap-2 text-xs font-bold">
+              <div className={`p-3 rounded-2xl border ${motivoBloqueo === 'checklist' || motivoBloqueo === 'ambos' ? 'bg-red-50 border-red-200 text-red-800' : 'bg-green-50 border-green-200 text-green-800'}`}>
+                Check-list: {motivoBloqueo === 'checklist' || motivoBloqueo === 'ambos' ? 'Rechazado' : 'Aprobado'}
+              </div>
+              <div className={`p-3 rounded-2xl border ${motivoBloqueo === 'pvt' || motivoBloqueo === 'ambos' ? 'bg-red-50 border-red-200 text-red-800' : 'bg-green-50 border-green-200 text-green-800'}`}>
+                PVT: {puntajeGlobalPVT}% ({motivoBloqueo === 'pvt' || motivoBloqueo === 'ambos' ? 'Bloqueado' : 'Aprobado'})
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-500 font-medium">
+              {motivoBloqueo === 'pvt'
+                ? 'Dirigete al area de Prevencion de Riesgos y revisa tu resumen de jornada.'
+                : 'Debes coordinar la hora de ingreso al taller y revisar tu resumen antes de finalizar.'}
+            </p>
+
+            <button
+              type="button"
+              onClick={() => setMostrarResumen(true)}
+              className="w-full bg-amber-600 hover:bg-amber-700 text-white font-black py-4 rounded-2xl text-xs shadow-lg transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+            >
+              {motivoBloqueo === 'pvt' ? 'Ir al Resumen de Jornada' : 'Agendar Hora en Taller y Ver Resumen'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 6. Enviando reporte habilitado */}
+      {encuestaCompletada && !mostrarResumen && (
+        <div className="bg-white/75 backdrop-blur-md p-8 rounded-2xl shadow-xl max-w-md border-2 border-green-500/80 animate-fade-in w-full relative z-10 text-center">
+          <h1 className="text-2xl font-black text-green-700">Reporte Enviado</h1>
+          <p className="mt-2 text-slate-700 font-medium">Check-list y pruebas PVT aprobadas. Generando resumen...</p>
+          <div className="mt-6 flex justify-center">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-green-600"></div>
+          </div>
+        </div>
+      )}
+
+      {/* 7. Resumen de Jornada */}
       {mostrarResumen && !jornadaFinalizada && (
         <ResumenConductor
           idPatente={patenteValida}
           nombreConductor={nombreConductor}
           rutConductor={rutConductor}
           bloqueado={bloqueado}
+          motivoBloqueo={motivoBloqueo}
+          puntajePVT={puntajeGlobalPVT}
           kilometrajeActual={kilometrajeActual}
           vehiculo={vehiculo}
           forzarDescarga={forzarDescarga}
@@ -808,9 +880,9 @@ export default function VistaConductor() {
         />
       )}
 
-      {/* 9. Despedida */}
+      {/* 8. Despedida */}
       {jornadaFinalizada && (
-        <div className="bg-white/60 backdrop-blur-md p-10 rounded-3xl shadow-2xl max-w-md w-full border-t-8 border-green-500 animate-fade-in relative z-10 border border-white/50 text-center">
+        <div className="bg-white/75 backdrop-blur-md p-10 rounded-3xl shadow-2xl max-w-md w-full border-t-8 border-green-500 animate-fade-in relative z-10 border border-white/50 text-center">
           <div className="mx-auto w-16 h-16 bg-green-100/90 text-green-700 rounded-full flex items-center justify-center mb-6 shadow-inner">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
@@ -818,7 +890,7 @@ export default function VistaConductor() {
           </div>
           <h1 className="text-3xl font-black text-slate-800 mb-4">Muchas gracias, {nombreConductor}!</h1>
           <p className="text-slate-600 text-base leading-relaxed mb-8 font-medium">
-            Tu reporte de checklist diario ha sido completado y guardado con exito. Que tengas una excelente jornada y un viaje muy seguro!
+            Tu reporte de checklist diario y evaluacion PVT han sido completados y guardados con exito.
           </p>
           <button onClick={() => { sessionStorage.removeItem(storageKey); window.location.reload(); }} className="text-sm font-bold text-slate-600 hover:text-slate-900 transition-colors">
             Volver a escanear QR
