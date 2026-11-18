@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { collection, addDoc, updateDoc, doc, serverTimestamp, query, where, getDocs, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage } from '../lib/firebase';
@@ -10,9 +10,11 @@ import TestSeguimiento from '../components/conductor/TestSeguimiento';
 import TestMemoriaSecuencia from '../components/conductor/TestMemoriaSecuencia';
 import FormChecklist from '../components/conductor/FormChecklist';
 import ResumenConductor from '../components/conductor/ResumenConductor';
+import VistaFiscalizador from '../components/conductor/VistaFiscalizador';
 
 type TipoTestPVT = 'reaccion' | 'seguimiento' | 'memoria';
 type MotivoBloqueo = 'pvt' | 'checklist' | 'ambos' | null;
+type ModoAccesoQR = 'seleccion' | 'fiscalizador' | 'conductor';
 
 const preguntasBasePorTipo = {
   'Tracto camión': [
@@ -117,6 +119,7 @@ const crearPreviewImagen = (file: File, callback: (preview: string) => void) => 
 
 export default function VistaConductor() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const patenteValida = id ? id.toUpperCase() : '';
   const storageKey = `checklist_cache_${patenteValida}`;
 
@@ -128,6 +131,20 @@ export default function VistaConductor() {
       return false;
     }
   });
+
+  const [modoAcceso, setModoAcceso] = useState<ModoAccesoQR>(() => {
+    try {
+      const cache = sessionStorage.getItem(storageKey);
+      if (cache && JSON.parse(cache).identificado) return 'conductor';
+      return 'seleccion';
+    } catch {
+      return 'seleccion';
+    }
+  });
+
+  // Estado para vista de Fiscalizador
+  const [ultimoReporte, setUltimoReporte] = useState<any>(null);
+  const [cargandoUltimoReporte, setCargandoUltimoReporte] = useState<boolean>(false);
 
   // Paso 2: Checklist primero
   const [checklistCompletado, setChecklistCompletado] = useState(false);
@@ -170,6 +187,14 @@ export default function VistaConductor() {
 
   const [fotoLicenciaPreview, setFotoLicenciaPreview] = useState<string | null>(null);
   const [fotoLicencia, setFotoLicencia] = useState<File | null>(null);
+  const [vencimientoLicencia, setVencimientoLicencia] = useState<string>(() => {
+    try {
+      const cache = sessionStorage.getItem(storageKey);
+      return cache ? JSON.parse(cache).vencimientoLicencia || '' : '';
+    } catch {
+      return '';
+    }
+  });
 
   const [encuestaCompletada, setEncuestaCompletada] = useState(false);
   const [bloqueado, setBloqueado] = useState(false);
@@ -237,6 +262,7 @@ export default function VistaConductor() {
         identificado,
         nombreConductor,
         rutConductor,
+        vencimientoLicencia,
         kilometraje,
         respuestasChecklist,
         ubicacionGPS
@@ -249,6 +275,7 @@ export default function VistaConductor() {
     identificado,
     nombreConductor,
     rutConductor,
+    vencimientoLicencia,
     kilometraje,
     respuestasChecklist,
     ubicacionGPS,
@@ -286,6 +313,32 @@ export default function VistaConductor() {
     };
     cargarVehiculo();
   }, [patenteValida]);
+
+  const abrirVistaFiscalizador = async () => {
+    setModoAcceso('fiscalizador');
+    if (!patenteValida) return;
+
+    setCargandoUltimoReporte(true);
+    try {
+      const qReportes = query(collection(db, 'reportes'), where('vehiculoId', '==', patenteValida));
+      const snap = await getDocs(qReportes);
+      if (!snap.empty) {
+        const lista = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        lista.sort((a: any, b: any) => {
+          const tA = a.fecha?.toMillis?.() || 0;
+          const tB = b.fecha?.toMillis?.() || 0;
+          return tB - tA;
+        });
+        setUltimoReporte(lista[0]);
+      } else {
+        setUltimoReporte(null);
+      }
+    } catch (error) {
+      console.error('Error al cargar ultimo reporte para fiscalizador:', error);
+    } finally {
+      setCargandoUltimoReporte(false);
+    }
+  };
 
   useEffect(() => {
     if (encuestaCompletada) {
@@ -382,7 +435,6 @@ export default function VistaConductor() {
 
   const preguntasDinamicas = [...preguntasPrevencionRemotas, ...preguntasVehiculoBase];
 
-  // Paso 2: Procesa el Check-list y avanza a los juegos PVT sin bloquear aun
   const manejarEnvioChecklist = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
@@ -460,6 +512,7 @@ export default function VistaConductor() {
         fotoPath,
         licenciaUrl,
         licenciaPath,
+        vencimientoLicencia,
         firmaUrl,
         firmaPath,
         tieneFallaCritica,
@@ -495,7 +548,6 @@ export default function VistaConductor() {
     return Math.max(0, Math.min(100, puntos));
   };
 
-  // Paso 3 y 4: Finaliza PVT, guarda reporte unificado y determina bloqueos (checklist, pvt o ambos)
   const procesarResultadoTestGenerico = async (resultado: any) => {
     const nuevosTests = [...datosTests, resultado];
     setDatosTests(nuevosTests);
@@ -532,6 +584,7 @@ export default function VistaConductor() {
         fotoPath: datosChecklistPendiente?.fotoPath || null,
         licenciaUrl: datosChecklistPendiente?.licenciaUrl || null,
         licenciaPath: datosChecklistPendiente?.licenciaPath || null,
+        vencimientoLicencia: datosChecklistPendiente?.vencimientoLicencia || vencimientoLicencia || null,
         licenciaInternaUrl: null,
         licenciaInternaPath: null,
         licenciaInternaTraseraUrl: null,
@@ -681,221 +734,348 @@ export default function VistaConductor() {
 
   return (
     <div className="min-h-screen bg-cover bg-center bg-fixed bg-no-repeat flex flex-col items-center justify-center p-4 md:p-6 relative" style={{ backgroundImage: "url('/fondo-conductor.jpg')" }}>
-      {/* 1. Identificacion */}
-      {!identificado && (
-        <IdentificacionConductor
-          patente={patenteValida}
-          nombreConductor={nombreConductor}
-          setNombreConductor={setNombreConductor}
-          rutConductor={rutConductor}
-          setRutConductor={setRutConductor}
-          fotoLicenciaPreview={fotoLicenciaPreview}
-          setFotoLicenciaPreview={setFotoLicenciaPreview}
-          setFotoLicencia={setFotoLicencia}
-          ubicacionGPS={ubicacionGPS}
-          setUbicacionGPS={setUbicacionGPS}
-          vehiculo={vehiculo}
-          forzarDescarga={forzarDescarga}
-          calcularEstadoVencimiento={calcularEstadoVencimiento}
-          onContinuar={handleValidarContinuarIdentificacion}
-        />
-      )}
-
-      {/* 2. Formulario de Checklist (Primero) */}
-      {identificado && !checklistCompletado && !encuestaCompletada && !bloqueado && (
-        <div className="w-full max-w-2xl space-y-4">
-          <FormChecklist
-            idPatente={patenteValida}
-            nombreConductor={nombreConductor}
-            vehiculo={vehiculo}
-            cargandoVehiculo={cargandoVehiculo}
-            kilometraje={kilometraje}
-            setKilometraje={setKilometraje}
-            kilometrajeAnterior={kilometrajeAnterior}
-            fotoPreview={fotoPreview}
-            onCapturarFotoTablero={capturarFotoTablero}
-            preguntasDinamicas={preguntasDinamicas}
-            respuestasChecklist={respuestasChecklist}
-            onCambioRespuesta={(idQ, val) => setRespuestasChecklist((prev) => ({ ...prev, [idQ]: val }))}
-            canvasRef={canvasRef}
-            tieneFirma={tieneFirma}
-            setTieneFirma={setTieneFirma}
-            subiendo={subiendo}
-            onSubmit={manejarEnvioChecklist}
-            forzarDescarga={forzarDescarga}
-            calcularEstadoVencimiento={calcularEstadoVencimiento}
-          />
-        </div>
-      )}
-
-      {/* 3. Pruebas Psicomotoras Aleatorias PVT (Despues del Checklist) */}
-      {identificado && checklistCompletado && !fasePVTCompletada && !guardandoFinal && !bloqueado && (
-        <div className="w-full flex flex-col items-center">
-          <div className="mb-3 text-[11px] font-black uppercase tracking-wider text-slate-700 bg-white/70 backdrop-blur-sm px-4 py-1.5 rounded-full shadow-sm">
-            Bateria Psicomotora: Prueba {testActualIndice + 1} de 2
-          </div>
-          {renderComponenteTest(parejaTests[testActualIndice])}
-        </div>
-      )}
-
-      {/* Guardando reporte final */}
-      {guardandoFinal && (
-        <div className="bg-white/80 backdrop-blur-md p-8 rounded-3xl shadow-2xl max-w-md border border-white/60 animate-fade-in w-full relative z-10 text-center">
-          <h2 className="text-xl font-black text-slate-800">Procesando Evaluacion Integral</h2>
-          <p className="mt-2 text-sm text-slate-600 font-medium">Consolidando resultados de checklist y pruebas PVT...</p>
-          <div className="mt-6 flex justify-center">
-            <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-blue-600"></div>
-          </div>
-        </div>
-      )}
-
-      {/* 4. Tarjeta de Puntaje de Pruebas Psicomotoras */}
-      {identificado && checklistCompletado && fasePVTCompletada && mostrarPantallaPuntajePVT && !bloqueado && (
-        <div className="bg-white/85 backdrop-blur-md p-8 rounded-3xl shadow-2xl max-w-md w-full border border-white/60 animate-fade-in relative z-10 text-center">
-          <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner ${pvtAprobado ? 'bg-blue-100 text-blue-600' : 'bg-rose-100 text-rose-600'}`}>
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              {pvtAprobado ? (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              ) : (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              )}
-            </svg>
-          </div>
-          <span className={`text-xs font-black uppercase px-3 py-1 rounded-full shadow-sm ${pvtAprobado ? 'bg-green-100 text-green-800' : 'bg-rose-100 text-rose-800'}`}>
-            {pvtAprobado ? 'Pruebas Completadas' : 'Alerta de Fatiga / Vigilia'}
-          </span>
-          <h2 className="text-2xl font-black text-slate-800 mt-2">Aptitud Psicomotora</h2>
-
-          <div className="bg-white/90 rounded-2xl p-4 my-5 border border-slate-200 shadow-sm">
-            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Calificacion de Vigilia</div>
-            <div className={`text-4xl font-black my-1 ${pvtAprobado ? 'text-blue-600' : 'text-rose-600'}`}>{puntajeGlobalPVT}%</div>
-            <p className="text-xs text-slate-600 font-medium">
-              {pvtAprobado
-                ? 'Evaluacion psicomotora dentro de parametros operativos.'
-                : 'Puntaje bajo el umbral minimo de seguridad requerido.'}
+      {/* 0. Selector Inicial al Escanear QR */}
+      {modoAcceso === 'seleccion' && (
+        <div className="bg-white/80 backdrop-blur-md p-6 md:p-8 rounded-3xl shadow-2xl max-w-md w-full border border-white/60 animate-fade-in relative z-10 space-y-6">
+          <div className="text-center">
+            <span className="bg-blue-100 text-blue-700 text-xs font-black uppercase px-3 py-1 rounded-full shadow-sm">
+              Control de Flota
+            </span>
+            <h1 className="text-2xl font-black text-slate-800 mt-3">Seleccione Perfil de Acceso</h1>
+            <p className="text-sm text-slate-600 mt-1 font-mono font-bold tracking-wider">
+              Patente: {patenteValida}
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={handleContinuarDesdePuntajePVT}
-            className={`w-full text-white font-black py-4 rounded-2xl shadow-lg transition-all ${pvtAprobado ? 'bg-blue-600 hover:bg-blue-700' : 'bg-rose-600 hover:bg-rose-700'}`}
-          >
-            Ver Resultado de Habilitacion
-          </button>
-        </div>
-      )}
-
-      {/* 5. Pantalla Unificada de Bloqueo Final (Checklist, PVT o Ambos) */}
-      {bloqueado && !mostrarResumen && motivoBloqueo !== null && (
-        <div className="bg-white/90 backdrop-blur-md p-8 rounded-3xl shadow-2xl max-w-md border-2 border-red-500/80 animate-fade-in w-full relative z-10 text-center">
-          <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-          </div>
-
-          <span className="bg-red-100 text-red-800 text-[11px] font-black uppercase px-3 py-1 rounded-full tracking-wider">
-            {motivoBloqueo === 'ambos' && 'Bloqueo por Check-list y Prueba PVT'}
-            {motivoBloqueo === 'checklist' && 'Bloqueo por Falla en Check-list'}
-            {motivoBloqueo === 'pvt' && 'Bloqueo por Prueba Psicomotora PVT'}
-          </span>
-
-          <h1 className="text-2xl font-black text-red-700 mt-2">OPERACION BLOQUEADA</h1>
-
-          <div className="mt-4 space-y-4">
-            {motivoBloqueo === 'ambos' && (
-              <p className="text-slate-700 text-sm font-medium">
-                Se detectaron <strong>fallas criticas en el check-list del vehiculo</strong> y ademas tu <strong>evaluacion psicomotora PVT ({puntajeGlobalPVT}%)</strong> no alcanzo el minimo requerido. No puedes iniciar ruta.
-              </p>
-            )}
-
-            {motivoBloqueo === 'checklist' && (
-              <p className="text-slate-700 text-sm font-medium">
-                Se detectaron una o mas <strong>fallas criticas en el check-list de inspeccion y prevencion</strong>. Por normativa de seguridad, este vehiculo no puede iniciar ruta.
-              </p>
-            )}
-
-            {motivoBloqueo === 'pvt' && (
-              <p className="text-slate-700 text-sm font-medium">
-                Tu resultado en las <strong>pruebas psicomotoras PVT ({puntajeGlobalPVT}%)</strong> indica fatiga o falta de vigilia. Por seguridad operativa, no estas habilitado para conducir.
-              </p>
-            )}
-
-            <div className="grid grid-cols-2 gap-2 text-xs font-bold">
-              <div className={`p-3 rounded-2xl border ${motivoBloqueo === 'checklist' || motivoBloqueo === 'ambos' ? 'bg-red-50 border-red-200 text-red-800' : 'bg-green-50 border-green-200 text-green-800'}`}>
-                Check-list: {motivoBloqueo === 'checklist' || motivoBloqueo === 'ambos' ? 'Rechazado' : 'Aprobado'}
-              </div>
-              <div className={`p-3 rounded-2xl border ${motivoBloqueo === 'pvt' || motivoBloqueo === 'ambos' ? 'bg-red-50 border-red-200 text-red-800' : 'bg-green-50 border-green-200 text-green-800'}`}>
-                PVT: {puntajeGlobalPVT}% ({motivoBloqueo === 'pvt' || motivoBloqueo === 'ambos' ? 'Bloqueado' : 'Aprobado'})
-              </div>
-            </div>
-
-            <p className="text-xs text-slate-500 font-medium">
-              {motivoBloqueo === 'pvt'
-                ? 'Dirigete al area de Prevencion de Riesgos y revisa tu resumen de jornada.'
-                : 'Debes coordinar la hora de ingreso al taller y revisar tu resumen antes de finalizar.'}
-            </p>
-
+          <div className="space-y-3">
+            {/* Fiscalizador */}
             <button
               type="button"
-              onClick={() => setMostrarResumen(true)}
-              className="w-full bg-amber-600 hover:bg-amber-700 text-white font-black py-4 rounded-2xl text-xs shadow-lg transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+              onClick={abrirVistaFiscalizador}
+              className="w-full p-4 bg-white/90 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-300 rounded-2xl shadow-sm transition-all flex items-center justify-between text-left group active:scale-[0.99]"
             >
-              {motivoBloqueo === 'pvt' ? 'Ir al Resumen de Jornada' : 'Agendar Hora en Taller y Ver Resumen'}
+              <div className="flex items-center gap-3.5">
+                <div className="w-11 h-11 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <div>
+                  <div className="text-sm font-black text-slate-800 group-hover:text-indigo-700">Fiscalizador</div>
+                  <div className="text-xs text-slate-500 font-medium">Ver documentos del vehículo y licencia del conductor</div>
+                </div>
+              </div>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400 group-hover:text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+
+            {/* Conductor */}
+            <button
+              type="button"
+              onClick={() => setModoAcceso('conductor')}
+              className="w-full p-4 bg-white/90 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 rounded-2xl shadow-sm transition-all flex items-center justify-between text-left group active:scale-[0.99]"
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="w-11 h-11 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                </div>
+                <div>
+                  <div className="text-sm font-black text-slate-800 group-hover:text-blue-700">Conductor</div>
+                  <div className="text-xs text-slate-500 font-medium">Identificación, checklist diario y evaluación PVT</div>
+                </div>
+              </div>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400 group-hover:text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+
+            {/* Taller */}
+            <button
+              type="button"
+              onClick={() => navigate('/login?destino=taller')}
+              className="w-full p-4 bg-white/90 hover:bg-amber-50 border border-slate-200 hover:border-amber-300 rounded-2xl shadow-sm transition-all flex items-center justify-between text-left group active:scale-[0.99]"
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="w-11 h-11 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <div className="text-sm font-black text-slate-800 group-hover:text-amber-700">Taller</div>
+                  <div className="text-xs text-slate-500 font-medium">Iniciar sesión para acceder al panel de taller</div>
+                </div>
+              </div>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400 group-hover:text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+
+            {/* Admin */}
+            <button
+              type="button"
+              onClick={() => navigate('/login?destino=admin')}
+              className="w-full p-4 bg-white/90 hover:bg-slate-100 border border-slate-200 hover:border-slate-400 rounded-2xl shadow-sm transition-all flex items-center justify-between text-left group active:scale-[0.99]"
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="w-11 h-11 rounded-xl bg-slate-200 text-slate-800 flex items-center justify-center shrink-0">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                </div>
+                <div>
+                  <div className="text-sm font-black text-slate-800">Admin</div>
+                  <div className="text-xs text-slate-500 font-medium">Iniciar sesión para acceder al panel administrativo</div>
+                </div>
+              </div>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-400 group-hover:text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
             </button>
           </div>
         </div>
       )}
 
-      {/* 6. Enviando reporte habilitado */}
-      {encuestaCompletada && !mostrarResumen && (
-        <div className="bg-white/75 backdrop-blur-md p-8 rounded-2xl shadow-xl max-w-md border-2 border-green-500/80 animate-fade-in w-full relative z-10 text-center">
-          <h1 className="text-2xl font-black text-green-700">Reporte Enviado</h1>
-          <p className="mt-2 text-slate-700 font-medium">Check-list y pruebas PVT aprobadas. Generando resumen...</p>
-          <div className="mt-6 flex justify-center">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-green-600"></div>
-          </div>
-        </div>
-      )}
-
-      {/* 7. Resumen de Jornada */}
-      {mostrarResumen && !jornadaFinalizada && (
-        <ResumenConductor
+      {/* Vista de Fiscalizador (Solo Lectura) */}
+      {modoAcceso === 'fiscalizador' && (
+        <VistaFiscalizador
           idPatente={patenteValida}
-          nombreConductor={nombreConductor}
-          rutConductor={rutConductor}
-          bloqueado={bloqueado}
-          motivoBloqueo={motivoBloqueo}
-          puntajePVT={puntajeGlobalPVT}
-          kilometrajeActual={kilometrajeActual}
           vehiculo={vehiculo}
+          ultimoReporte={ultimoReporte}
+          cargandoReporte={cargandoUltimoReporte}
           forzarDescarga={forzarDescarga}
           calcularEstadoVencimiento={calcularEstadoVencimiento}
-          onRehacerChecklist={handleRehacerChecklist}
-          onFinalizarJornada={() => {
-            sessionStorage.removeItem(storageKey);
-            setJornadaFinalizada(true);
-          }}
+          onVolverMenu={() => setModoAcceso('seleccion')}
         />
       )}
 
-      {/* 8. Despedida */}
-      {jornadaFinalizada && (
-        <div className="bg-white/75 backdrop-blur-md p-10 rounded-3xl shadow-2xl max-w-md w-full border-t-8 border-green-500 animate-fade-in relative z-10 border border-white/50 text-center">
-          <div className="mx-auto w-16 h-16 bg-green-100/90 text-green-700 rounded-full flex items-center justify-center mb-6 shadow-inner">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-          <h1 className="text-3xl font-black text-slate-800 mb-4">Muchas gracias, {nombreConductor}!</h1>
-          <p className="text-slate-600 text-base leading-relaxed mb-8 font-medium">
-            Tu reporte de checklist diario y evaluacion PVT han sido completados y guardados con exito.
-          </p>
-          <button onClick={() => { sessionStorage.removeItem(storageKey); window.location.reload(); }} className="text-sm font-bold text-slate-600 hover:text-slate-900 transition-colors">
-            Volver a escanear QR
-          </button>
-        </div>
+      {/* Flujo de Conductor */}
+      {modoAcceso === 'conductor' && (
+        <>
+          {/* 1. Identificacion */}
+          {!identificado && (
+            <IdentificacionConductor
+              patente={patenteValida}
+              nombreConductor={nombreConductor}
+              setNombreConductor={setNombreConductor}
+              rutConductor={rutConductor}
+              setRutConductor={setRutConductor}
+              fotoLicenciaPreview={fotoLicenciaPreview}
+              setFotoLicenciaPreview={setFotoLicenciaPreview}
+              setFotoLicencia={setFotoLicencia}
+              vencimientoLicencia={vencimientoLicencia}
+              setVencimientoLicencia={setVencimientoLicencia}
+              ubicacionGPS={ubicacionGPS}
+              setUbicacionGPS={setUbicacionGPS}
+              vehiculo={vehiculo}
+              forzarDescarga={forzarDescarga}
+              calcularEstadoVencimiento={calcularEstadoVencimiento}
+              onContinuar={handleValidarContinuarIdentificacion}
+              onVolverMenu={() => setModoAcceso('seleccion')}
+            />
+          )}
+
+          {/* 2. Formulario de Checklist (Primero) */}
+          {identificado && !checklistCompletado && !encuestaCompletada && !bloqueado && (
+            <div className="w-full max-w-2xl space-y-4">
+              <FormChecklist
+                idPatente={patenteValida}
+                nombreConductor={nombreConductor}
+                vehiculo={vehiculo}
+                cargandoVehiculo={cargandoVehiculo}
+                kilometraje={kilometraje}
+                setKilometraje={setKilometraje}
+                kilometrajeAnterior={kilometrajeAnterior}
+                fotoPreview={fotoPreview}
+                onCapturarFotoTablero={capturarFotoTablero}
+                preguntasDinamicas={preguntasDinamicas}
+                respuestasChecklist={respuestasChecklist}
+                onCambioRespuesta={(idQ, val) => setRespuestasChecklist((prev) => ({ ...prev, [idQ]: val }))}
+                canvasRef={canvasRef}
+                tieneFirma={tieneFirma}
+                setTieneFirma={setTieneFirma}
+                subiendo={subiendo}
+                onSubmit={manejarEnvioChecklist}
+                forzarDescarga={forzarDescarga}
+                calcularEstadoVencimiento={calcularEstadoVencimiento}
+              />
+            </div>
+          )}
+
+          {/* 3. Pruebas Psicomotoras Aleatorias PVT (Despues del Checklist) */}
+          {identificado && checklistCompletado && !fasePVTCompletada && !guardandoFinal && !bloqueado && (
+            <div className="w-full flex flex-col items-center">
+              <div className="mb-3 text-[11px] font-black uppercase tracking-wider text-slate-700 bg-white/70 backdrop-blur-sm px-4 py-1.5 rounded-full shadow-sm">
+                Bateria Psicomotora: Prueba {testActualIndice + 1} de 2
+              </div>
+              {renderComponenteTest(parejaTests[testActualIndice])}
+            </div>
+          )}
+
+          {/* Guardando reporte final */}
+          {guardandoFinal && (
+            <div className="bg-white/80 backdrop-blur-md p-8 rounded-3xl shadow-2xl max-w-md border border-white/60 animate-fade-in w-full relative z-10 text-center">
+              <h2 className="text-xl font-black text-slate-800">Procesando Evaluacion Integral</h2>
+              <p className="mt-2 text-sm text-slate-600 font-medium">Consolidando resultados de checklist y pruebas PVT...</p>
+              <div className="mt-6 flex justify-center">
+                <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-blue-600"></div>
+              </div>
+            </div>
+          )}
+
+          {/* 4. Tarjeta de Puntaje de Pruebas Psicomotoras */}
+          {identificado && checklistCompletado && fasePVTCompletada && mostrarPantallaPuntajePVT && !bloqueado && (
+            <div className="bg-white/85 backdrop-blur-md p-8 rounded-3xl shadow-2xl max-w-md w-full border border-white/60 animate-fade-in relative z-10 text-center">
+              <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner ${pvtAprobado ? 'bg-blue-100 text-blue-600' : 'bg-rose-100 text-rose-600'}`}>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  {pvtAprobado ? (
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  ) : (
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  )}
+                </svg>
+              </div>
+              <span className={`text-xs font-black uppercase px-3 py-1 rounded-full shadow-sm ${pvtAprobado ? 'bg-green-100 text-green-800' : 'bg-rose-100 text-rose-800'}`}>
+                {pvtAprobado ? 'Pruebas Completadas' : 'Alerta de Fatiga / Vigilia'}
+              </span>
+              <h2 className="text-2xl font-black text-slate-800 mt-2">Aptitud Psicomotora</h2>
+
+              <div className="bg-white/90 rounded-2xl p-4 my-5 border border-slate-200 shadow-sm">
+                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Calificacion de Vigilia</div>
+                <div className={`text-4xl font-black my-1 ${pvtAprobado ? 'text-blue-600' : 'text-rose-600'}`}>{puntajeGlobalPVT}%</div>
+                <p className="text-xs text-slate-600 font-medium">
+                  {pvtAprobado
+                    ? 'Evaluacion psicomotora dentro de parametros operativos.'
+                    : 'Puntaje bajo el umbral minimo de seguridad requerido.'}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleContinuarDesdePuntajePVT}
+                className={`w-full text-white font-black py-4 rounded-2xl shadow-lg transition-all ${pvtAprobado ? 'bg-blue-600 hover:bg-blue-700' : 'bg-rose-600 hover:bg-rose-700'}`}
+              >
+                Ver Resultado de Habilitacion
+              </button>
+            </div>
+          )}
+
+          {/* 5. Pantalla Unificada de Bloqueo Final (Checklist, PVT o Ambos) */}
+          {bloqueado && !mostrarResumen && motivoBloqueo !== null && (
+            <div className="bg-white/90 backdrop-blur-md p-8 rounded-3xl shadow-2xl max-w-md border-2 border-red-500/80 animate-fade-in w-full relative z-10 text-center">
+              <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+
+              <span className="bg-red-100 text-red-800 text-[11px] font-black uppercase px-3 py-1 rounded-full tracking-wider">
+                {motivoBloqueo === 'ambos' && 'Bloqueo por Check-list y Prueba PVT'}
+                {motivoBloqueo === 'checklist' && 'Bloqueo por Falla en Check-list'}
+                {motivoBloqueo === 'pvt' && 'Bloqueo por Prueba Psicomotora PVT'}
+              </span>
+
+              <h1 className="text-2xl font-black text-red-700 mt-2">OPERACION BLOQUEADA</h1>
+
+              <div className="mt-4 space-y-4">
+                {motivoBloqueo === 'ambos' && (
+                  <p className="text-slate-700 text-sm font-medium">
+                    Se detectaron <strong>fallas criticas en el check-list del vehiculo</strong> y ademas tu <strong>evaluacion psicomotora PVT ({puntajeGlobalPVT}%)</strong> no alcanzo el minimo requerido. No puedes iniciar ruta.
+                  </p>
+                )}
+
+                {motivoBloqueo === 'checklist' && (
+                  <p className="text-slate-700 text-sm font-medium">
+                    Se detectaron una o mas <strong>fallas criticas en el check-list de inspeccion y prevencion</strong>. Por normativa de seguridad, este vehiculo no puede iniciar ruta.
+                  </p>
+                )}
+
+                {motivoBloqueo === 'pvt' && (
+                  <p className="text-slate-700 text-sm font-medium">
+                    Tu resultado en las <strong>pruebas psicomotoras PVT ({puntajeGlobalPVT}%)</strong> indica fatiga o falta de vigilia. Por seguridad operativa, no estas habilitado para conducir.
+                  </p>
+                )}
+
+                <div className="grid grid-cols-2 gap-2 text-xs font-bold">
+                  <div className={`p-3 rounded-2xl border ${motivoBloqueo === 'checklist' || motivoBloqueo === 'ambos' ? 'bg-red-50 border-red-200 text-red-800' : 'bg-green-50 border-green-200 text-green-800'}`}>
+                    Check-list: {motivoBloqueo === 'checklist' || motivoBloqueo === 'ambos' ? 'Rechazado' : 'Aprobado'}
+                  </div>
+                  <div className={`p-3 rounded-2xl border ${motivoBloqueo === 'pvt' || motivoBloqueo === 'ambos' ? 'bg-red-50 border-red-200 text-red-800' : 'bg-green-50 border-green-200 text-green-800'}`}>
+                    PVT: {puntajeGlobalPVT}% ({motivoBloqueo === 'pvt' || motivoBloqueo === 'ambos' ? 'Bloqueado' : 'Aprobado'})
+                  </div>
+                </div>
+
+                <p className="text-xs text-slate-500 font-medium">
+                  {motivoBloqueo === 'pvt'
+                    ? 'Dirigete al area de Prevencion de Riesgos y revisa tu resumen de jornada.'
+                    : 'Debes coordinar la hora de ingreso al taller y revisar tu resumen antes de finalizar.'}
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => setMostrarResumen(true)}
+                  className="w-full bg-amber-600 hover:bg-amber-700 text-white font-black py-4 rounded-2xl text-xs shadow-lg transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+                >
+                  {motivoBloqueo === 'pvt' ? 'Ir al Resumen de Jornada' : 'Agendar Hora en Taller y Ver Resumen'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 6. Enviando reporte habilitado */}
+          {encuestaCompletada && !mostrarResumen && (
+            <div className="bg-white/75 backdrop-blur-md p-8 rounded-2xl shadow-xl max-w-md border-2 border-green-500/80 animate-fade-in w-full relative z-10 text-center">
+              <h1 className="text-2xl font-black text-green-700">Reporte Enviado</h1>
+              <p className="mt-2 text-slate-700 font-medium">Check-list y pruebas PVT aprobadas. Generando resumen...</p>
+              <div className="mt-6 flex justify-center">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-green-600"></div>
+              </div>
+            </div>
+          )}
+
+          {/* 7. Resumen de Jornada */}
+          {mostrarResumen && !jornadaFinalizada && (
+            <ResumenConductor
+              idPatente={patenteValida}
+              nombreConductor={nombreConductor}
+              rutConductor={rutConductor}
+              bloqueado={bloqueado}
+              motivoBloqueo={motivoBloqueo}
+              puntajePVT={puntajeGlobalPVT}
+              kilometrajeActual={kilometrajeActual}
+              vehiculo={vehiculo}
+              forzarDescarga={forzarDescarga}
+              calcularEstadoVencimiento={calcularEstadoVencimiento}
+              onRehacerChecklist={handleRehacerChecklist}
+              onFinalizarJornada={() => {
+                sessionStorage.removeItem(storageKey);
+                setJornadaFinalizada(true);
+              }}
+            />
+          )}
+
+          {/* 8. Despedida */}
+          {jornadaFinalizada && (
+            <div className="bg-white/75 backdrop-blur-md p-10 rounded-3xl shadow-2xl max-w-md w-full border-t-8 border-green-500 animate-fade-in relative z-10 border border-white/50 text-center">
+              <div className="mx-auto w-16 h-16 bg-green-100/90 text-green-700 rounded-full flex items-center justify-center mb-6 shadow-inner">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h1 className="text-3xl font-black text-slate-800 mb-4">Muchas gracias, {nombreConductor}!</h1>
+              <p className="text-slate-600 text-base leading-relaxed mb-8 font-medium">
+                Tu reporte de checklist diario y evaluacion PVT han sido completados y guardados con exito.
+              </p>
+              <button onClick={() => { sessionStorage.removeItem(storageKey); window.location.reload(); }} className="text-sm font-bold text-slate-600 hover:text-slate-900 transition-colors">
+                Volver a escanear QR
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

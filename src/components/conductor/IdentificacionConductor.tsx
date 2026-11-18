@@ -16,12 +16,15 @@ type IdentificacionConductorProps = {
   fotoLicenciaPreview: string | null;
   setFotoLicenciaPreview: (val: string | null) => void;
   setFotoLicencia: (val: File | null) => void;
+  vencimientoLicencia: string;
+  setVencimientoLicencia: (val: string) => void;
   ubicacionGPS: UbicacionGPS | null;
   setUbicacionGPS: (val: UbicacionGPS | null) => void;
   vehiculo?: any;
   forzarDescarga?: (url: string, nombre: string) => void;
   calcularEstadoVencimiento?: (fecha: string) => { texto: string; clase: string };
   onContinuar: () => void;
+  onVolverMenu?: () => void;
 };
 
 const formatearRutChileno = (valor: string) => {
@@ -55,11 +58,14 @@ export default function IdentificacionConductor({
   fotoLicenciaPreview,
   setFotoLicenciaPreview,
   setFotoLicencia,
+  vencimientoLicencia,
+  setVencimientoLicencia,
   ubicacionGPS,
   setUbicacionGPS,
   vehiculo,
   calcularEstadoVencimiento,
-  onContinuar
+  onContinuar,
+  onVolverMenu
 }: IdentificacionConductorProps) {
   const [error, setError] = useState<string | null>(null);
   const [obteniendoGPS, setObteniendoGPS] = useState(false);
@@ -140,6 +146,11 @@ export default function IdentificacionConductor({
       return;
     }
 
+    if (!vencimientoLicencia) {
+      setError('Falta ingresar la fecha de vencimiento de la Licencia Municipal.');
+      return;
+    }
+
     if (!ubicacionGPS) {
       setError('Es obligatorio capturar tu ubicación GPS actual antes de continuar.');
       return;
@@ -197,6 +208,18 @@ export default function IdentificacionConductor({
 
   return (
     <div className="bg-white/60 backdrop-blur-md p-6 md:p-8 rounded-3xl shadow-2xl max-w-md w-full border border-white/50 animate-fade-in relative z-10">
+      {onVolverMenu && (
+        <div className="flex justify-end mb-2">
+          <button
+            type="button"
+            onClick={onVolverMenu}
+            className="text-xs font-bold text-slate-600 hover:text-slate-900 transition-colors"
+          >
+            Volver al menú
+          </button>
+        </div>
+      )}
+
       <div className="text-center mb-6">
         <span className="bg-blue-100/90 text-blue-700 text-xs font-black uppercase px-3 py-1 rounded-full shadow-sm">Control de Flota</span>
         <h1 className="text-2xl font-black text-slate-800 mt-3">Identificación</h1>
@@ -323,6 +346,16 @@ export default function IdentificacionConductor({
               )}
             </div>
           </label>
+        </div>
+
+        <div>
+          <label className="block text-xs font-black text-slate-600 uppercase mb-1 ml-1">Fecha Vencimiento / Control Licencia *</label>
+          <input
+            type="date"
+            value={vencimientoLicencia}
+            onChange={(e) => { setVencimientoLicencia(e.target.value); if (error) setError(null); }}
+            className="w-full p-4 bg-white/70 border border-white/80 rounded-2xl font-bold text-slate-800 focus:border-blue-500 focus:bg-white/90 focus:outline-none transition-all shadow-sm"
+          />
         </div>
 
         <div>

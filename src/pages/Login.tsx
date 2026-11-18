@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { doc, getDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
@@ -14,6 +14,8 @@ export default function Login() {
   const [cargando, setCargando] = useState(false);
   const [mostrarPassword, setMostrarPassword] = useState(false);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const destino = (searchParams.get('destino') || '').toLowerCase().trim();
 
   const manejarLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,7 +64,17 @@ export default function Login() {
             console.error('Error al registrar historial de login:', historialErr);
           }
 
-          // Ruteo por rol
+          // Priorizar destino solicitado desde el QR si el rol tiene acceso
+          if (destino === 'taller' && (rol === 'taller' || rol === 'admin')) {
+            navigate('/taller');
+            return;
+          }
+          if (destino === 'admin' && (rol === 'admin' || rol === 'admin_readonly' || rol === 'auditor')) {
+            navigate('/admin');
+            return;
+          }
+
+          // Ruteo por rol por defecto
           if (rol === 'admin' || rol === 'admin_readonly' || rol === 'auditor') {
             navigate('/admin');
           } else if (rol === 'taller') {
@@ -77,12 +89,11 @@ export default function Login() {
             navigate('/admin');
           }
         } else {
-          // Si no existe documento en Firestore pero si en Auth, va a admin por defecto
-          navigate('/admin');
+          navigate(destino === 'taller' ? '/taller' : '/admin');
         }
       } catch (firestoreErr) {
         console.error(firestoreErr);
-        navigate('/admin');
+        navigate(destino === 'taller' ? '/taller' : '/admin');
       }
     } catch (err: any) {
       setError('Credenciales incorrectas. Verifica tu correo y contraseña.');
@@ -109,7 +120,11 @@ export default function Login() {
             />
           </div>
           <span className="inline-block text-[10px] font-black uppercase tracking-wider text-blue-700 bg-blue-50 px-3 py-1 rounded-full border border-blue-200">
-            Plataforma Central
+            {destino === 'taller'
+              ? 'Acceso a Taller'
+              : destino === 'admin'
+              ? 'Acceso Administración'
+              : 'Plataforma Central'}
           </span>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight mt-2">
             Control de Acceso
