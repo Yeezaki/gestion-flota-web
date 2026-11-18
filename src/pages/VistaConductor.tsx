@@ -185,7 +185,14 @@ export default function VistaConductor() {
     }
   });
 
-  const [fotoLicenciaPreview, setFotoLicenciaPreview] = useState<string | null>(null);
+  const [fotoLicenciaPreview, setFotoLicenciaPreview] = useState<string | null>(() => {
+    try {
+      const cache = sessionStorage.getItem(storageKey);
+      return cache ? JSON.parse(cache).fotoLicenciaPreview || null : null;
+    } catch {
+      return null;
+    }
+  });
   const [fotoLicencia, setFotoLicencia] = useState<File | null>(null);
   const [vencimientoLicencia, setVencimientoLicencia] = useState<string>(() => {
     try {
@@ -263,6 +270,7 @@ export default function VistaConductor() {
         nombreConductor,
         rutConductor,
         vencimientoLicencia,
+        fotoLicenciaPreview,
         kilometraje,
         respuestasChecklist,
         ubicacionGPS
@@ -276,6 +284,7 @@ export default function VistaConductor() {
     nombreConductor,
     rutConductor,
     vencimientoLicencia,
+    fotoLicenciaPreview,
     kilometraje,
     respuestasChecklist,
     ubicacionGPS,
@@ -662,6 +671,8 @@ export default function VistaConductor() {
       }
 
       sessionStorage.removeItem(storageKey);
+      setFotoLicenciaPreview(null);
+      setFotoLicencia(null);
 
       setMotivoBloqueo(motivoFinal);
       setFasePVTCompletada(true);
@@ -717,6 +728,8 @@ export default function VistaConductor() {
     setRespuestasChecklist({});
     setFotoPreview(null);
     setFotoFile(null);
+    setFotoLicenciaPreview(null);
+    setFotoLicencia(null);
     setTieneFirma(false);
     setChecklistCompletado(false);
     setDatosChecklistPendiente(null);
@@ -1053,6 +1066,8 @@ export default function VistaConductor() {
               onRehacerChecklist={handleRehacerChecklist}
               onFinalizarJornada={() => {
                 sessionStorage.removeItem(storageKey);
+                setFotoLicenciaPreview(null);
+                setFotoLicencia(null);
                 setJornadaFinalizada(true);
               }}
             />

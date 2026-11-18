@@ -141,6 +141,11 @@ export default function TabReportes({ busqueda, filtroTipoVehiculo }: TabReporte
     }
   };
 
+  const formatearFechaCorta = (fechaStr?: string | null) => {
+    if (!fechaStr) return 'No registrada';
+    return fechaStr.split('-').reverse().join('-');
+  };
+
   const reportesFiltrados = reportes.filter(r => {
     const coincidePatente = r.vehiculoId?.toLowerCase().includes(busqueda.toLowerCase()) ||
                             r.conductorNombre?.toLowerCase().includes(busqueda.toLowerCase()) ||
@@ -335,11 +340,7 @@ export default function TabReportes({ busqueda, filtroTipoVehiculo }: TabReporte
               
               <div>
                 <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 mb-2">Respuestas del Checklist</h4>
-                {reporteSeleccionado.bloqueoPorTestCognitivo ? (
-                  <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-2xl text-xs font-bold text-center">
-                    El conductor no completó el checklist debido al bloqueo preventivo por fatiga / psicomotor.
-                  </div>
-                ) : reporteSeleccionado.respuestas ? (
+                {reporteSeleccionado.respuestas && Object.keys(reporteSeleccionado.respuestas).length > 0 ? (
                   <div className="max-h-60 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
                     {Object.entries(reporteSeleccionado.respuestas).map(([k, v]) => (
                       <div key={k} className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100">
@@ -350,28 +351,54 @@ export default function TabReportes({ busqueda, filtroTipoVehiculo }: TabReporte
                       </div>
                     ))}
                   </div>
+                ) : reporteSeleccionado.bloqueoPorTestCognitivo ? (
+                  <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-2xl text-xs font-bold text-center">
+                    El conductor no completó el checklist debido al bloqueo preventivo por fatiga / psicomotor.
+                  </div>
                 ) : (
                   <p className="text-sm text-slate-500 text-center py-4">No hay respuestas registradas.</p>
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-4 mb-6 border-t border-slate-100 pt-4">
-                {reporteSeleccionado.fotoUrl && (
-                  <div>
-                    <p className="text-xs font-black text-slate-400 uppercase mb-2">Tablero (Km)</p>
-                    <a href={reporteSeleccionado.fotoUrl} target="_blank" rel="noreferrer" className="block border border-slate-200 bg-slate-50 rounded-2xl p-2 flex justify-center hover:bg-slate-100 transition-colors">
-                      <img src={reporteSeleccionado.fotoUrl} alt="Foto Tablero" className="h-20 object-contain" />
+              {/* Evidencia de Tablero (Km) y Licencia Municipal siempre visibles en 2 columnas */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6 border-t border-slate-100 pt-4">
+                <div>
+                  <p className="text-xs font-black text-slate-400 uppercase mb-2">Tablero (Km)</p>
+                  {reporteSeleccionado.fotoUrl ? (
+                    <a href={reporteSeleccionado.fotoUrl} target="_blank" rel="noreferrer" className="block border border-slate-200 bg-slate-50 rounded-2xl p-2 flex flex-col items-center justify-center hover:bg-slate-100 transition-colors">
+                      <img src={reporteSeleccionado.fotoUrl} alt="Foto Tablero" className="h-24 object-contain" />
+                      <span className="text-[11px] font-mono font-bold text-slate-600 mt-1.5">
+                        {reporteSeleccionado.kilometraje || 'Sin km'} km
+                      </span>
                     </a>
-                  </div>
-                )}
-                {reporteSeleccionado.licenciaUrl && (
-                  <div>
-                    <p className="text-xs font-black text-slate-400 uppercase mb-2">Licencia</p>
-                    <a href={reporteSeleccionado.licenciaUrl} target="_blank" rel="noreferrer" className="block border border-slate-200 bg-slate-50 rounded-2xl p-2 flex justify-center hover:bg-slate-100 transition-colors">
-                      <img src={reporteSeleccionado.licenciaUrl} alt="Foto Licencia" className="h-20 object-contain" />
+                  ) : (
+                    <div className="border border-dashed border-slate-200 bg-slate-50 rounded-2xl p-4 h-32 flex flex-col items-center justify-center text-center">
+                      <span className="text-xs font-bold text-slate-400">Sin foto de tablero</span>
+                      <span className="text-[11px] font-mono font-bold text-slate-600 mt-1">
+                        Km digitado: {reporteSeleccionado.kilometraje || 'No ingresado'}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <p className="text-xs font-black text-slate-400 uppercase mb-2">Licencia Municipal</p>
+                  {reporteSeleccionado.licenciaUrl ? (
+                    <a href={reporteSeleccionado.licenciaUrl} target="_blank" rel="noreferrer" className="block border border-slate-200 bg-slate-50 rounded-2xl p-2 flex flex-col items-center justify-center hover:bg-slate-100 transition-colors">
+                      <img src={reporteSeleccionado.licenciaUrl} alt="Foto Licencia" className="h-24 object-contain" />
+                      <span className="text-[11px] font-bold text-slate-600 mt-1.5">
+                        Vence: {formatearFechaCorta(reporteSeleccionado.vencimientoLicencia)}
+                      </span>
                     </a>
-                  </div>
-                )}
+                  ) : (
+                    <div className="border border-dashed border-slate-200 bg-slate-50 rounded-2xl p-4 h-32 flex flex-col items-center justify-center text-center">
+                      <span className="text-xs font-bold text-slate-400">Sin foto de licencia</span>
+                      <span className="text-[11px] font-bold text-slate-600 mt-1">
+                        Vence: {formatearFechaCorta(reporteSeleccionado.vencimientoLicencia)}
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {reporteSeleccionado.firmaUrl && (
